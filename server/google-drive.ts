@@ -364,3 +364,47 @@ export async function getGalleryImages(folderId: string): Promise<GalleryImage[]
     throw error;
   }
 }
+
+export async function deleteGalleryImages(imageIds: string[]): Promise<void> {
+  if (!imageIds || imageIds.length === 0) {
+    throw new Error('Image IDs are required');
+  }
+  
+  try {
+    const drive = await getGoogleDriveClient();
+    
+    await Promise.all(
+      imageIds.map(async (fileId) => {
+        await drive.files.update({
+          fileId,
+          requestBody: {
+            trashed: true,
+          },
+        });
+      })
+    );
+  } catch (error) {
+    console.error('Error deleting gallery images from Google Drive:', error);
+    throw error;
+  }
+}
+
+export async function renameGalleryImage(imageId: string, newName: string): Promise<void> {
+  if (!imageId || !newName) {
+    throw new Error('Image ID and new name are required');
+  }
+  
+  try {
+    const drive = await getGoogleDriveClient();
+    
+    await drive.files.update({
+      fileId: imageId,
+      requestBody: {
+        name: newName,
+      },
+    });
+  } catch (error) {
+    console.error('Error renaming gallery image:', error);
+    throw error;
+  }
+}

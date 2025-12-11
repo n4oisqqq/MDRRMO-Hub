@@ -22,7 +22,7 @@ import {
   updateMapFrame,
   deleteMapFrame
 } from "./google-sheets";
-import { getDocumentFolders, getGalleryFolders, getGalleryImages, getAdministrativeMaps, getMapFolderContents, getSubfolderContents } from "./google-drive";
+import { getDocumentFolders, getGalleryFolders, getGalleryImages, deleteGalleryImages, renameGalleryImage, getAdministrativeMaps, getMapFolderContents, getSubfolderContents } from "./google-drive";
 import { getHazardZones, getMapAssets } from "./maps-data";
 import { insertInventorySchema, insertEventSchema, insertTaskSchema, insertContactSchema, insertMapFrameSchema } from "@shared/schema";
 
@@ -319,6 +319,35 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching gallery images:", error);
       res.status(500).json({ error: "Failed to fetch gallery images" });
+    }
+  });
+
+  app.delete("/api/gallery/images", async (req, res) => {
+    try {
+      const { imageIds } = req.body;
+      if (!imageIds || !Array.isArray(imageIds) || imageIds.length === 0) {
+        return res.status(400).json({ error: "Image IDs are required" });
+      }
+      await deleteGalleryImages(imageIds);
+      res.json({ success: true, deleted: imageIds.length });
+    } catch (error) {
+      console.error("Error deleting gallery images:", error);
+      res.status(500).json({ error: "Failed to delete gallery images" });
+    }
+  });
+
+  app.patch("/api/gallery/images/:imageId", async (req, res) => {
+    try {
+      const { imageId } = req.params;
+      const { name } = req.body;
+      if (!name) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+      await renameGalleryImage(imageId, name);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error renaming gallery image:", error);
+      res.status(500).json({ error: "Failed to rename gallery image" });
     }
   });
 

@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { BackgroundPattern } from "@/components/background-pattern";
@@ -8,15 +10,120 @@ import { SearchBar } from "@/components/search-bar";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
-import { Users, Building2, Phone, Mail, Plus, Edit2, Trash2 } from "lucide-react";
-import type { Contact, ContactStats } from "@shared/schema";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Users, Building2, Phone, Mail, Plus, Edit2, Trash2, Download, Printer, RefreshCw } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import type { Contact, ContactStats, InsertContact } from "@shared/schema";
+import { insertContactSchema } from "@shared/schema";
 
 export default function Contacts() {
   const [searchQuery, setSearchQuery] = useState("");
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const { toast } = useToast();
 
-  const { data: contacts = [], isLoading } = useQuery<Contact[]>({
+  const { data: contacts = [], isLoading, refetch } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
+  });
+
+  const addMutation = useMutation({
+    mutationFn: async (data: InsertContact) => {
+      return apiRequest("/api/contacts", {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      setAddModalOpen(false);
+      toast({ title: "Success", description: "Contact added successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to add contact", variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ index, data }: { index: number; data: InsertContact }) => {
+      return apiRequest(`/api/contacts/${index}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      setEditModalOpen(false);
+      setSelectedContact(null);
+      toast({ title: "Success", description: "Contact updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update contact", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (index: number) => {
+      return apiRequest(`/api/contacts/${index}`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      setDeleteDialogOpen(false);
+      setSelectedContact(null);
+      toast({ title: "Success", description: "Contact deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete contact", variant: "destructive" });
+    },
+  });
+
+  const addForm = useForm<InsertContact>({
+    resolver: zodResolver(insertContactSchema),
+    defaultValues: {
+      name: "",
+      agency: "",
+      designation: "",
+      phoneNumber: "",
+      email: "",
+      address: "",
+    },
+  });
+
+  const editForm = useForm<InsertContact>({
+    resolver: zodResolver(insertContactSchema),
   });
 
   const stats: ContactStats = {
@@ -36,6 +143,44 @@ export default function Contacts() {
     const matchesAgency = agencyFilter === "all" || contact.agency === agencyFilter;
     return matchesSearch && matchesAgency;
   });
+
+  const handleEdit = (contact: Contact, index: number) => {
+    setSelectedContact(contact);
+    setSelectedIndex(index);
+    editForm.reset({
+      name: contact.name,
+      agency: contact.agency,
+      designation: contact.designation,
+      phoneNumber: contact.phoneNumber,
+      email: contact.email,
+      address: contact.address || "",
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleDelete = (contact: Contact, index: number) => {
+    setSelectedContact(contact);
+    setSelectedIndex(index);
+    setDeleteDialogOpen(true);
+  };
+
+  const exportToCSV = () => {
+    const headers = ["Name", "Agency", "Designation", "Phone", "Email", "Address"];
+    const rows = filteredContacts.map((c) => [
+      c.name, c.agency, c.designation, c.phoneNumber, c.email, c.address || ""
+    ]);
+    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `contacts_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Exported", description: "Contacts exported to CSV" });
+  };
+
+  const handlePrint = () => window.print();
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#1A1E32" }}>
@@ -101,14 +246,47 @@ export default function Contacts() {
                 ))}
               </select>
 
-              <Button
-                className="rounded-lg px-4 gap-2"
-                style={{ background: "#6F42C1", color: "white" }}
-                data-testid="button-add-contact"
-              >
-                <Plus className="w-4 h-4" />
-                Add Contact
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  className="rounded-lg px-4 gap-2"
+                  style={{ background: "#6F42C1", color: "white" }}
+                  onClick={() => { addForm.reset(); setAddModalOpen(true); }}
+                  data-testid="button-add-contact"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Contact
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-lg px-4 gap-2 border-[rgba(121,101,193,0.4)]"
+                  style={{ color: "#E3D095" }}
+                  onClick={exportToCSV}
+                  data-testid="button-export"
+                >
+                  <Download className="w-4 h-4" />
+                  Export CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-lg px-4 gap-2 border-[rgba(121,101,193,0.4)]"
+                  style={{ color: "#E3D095" }}
+                  onClick={handlePrint}
+                  data-testid="button-print"
+                >
+                  <Printer className="w-4 h-4" />
+                  Print
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-lg border-[rgba(121,101,193,0.4)]"
+                  style={{ color: "#E3D095" }}
+                  onClick={() => refetch()}
+                  data-testid="button-refresh"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
 
             {isLoading ? (
@@ -119,14 +297,14 @@ export default function Contacts() {
                 title="No contacts found"
                 description={searchQuery ? "Try adjusting your search criteria." : "Start by adding your first contact."}
                 actionLabel="Add Contact"
-                onAction={() => {}}
+                onAction={() => { addForm.reset(); setAddModalOpen(true); }}
               />
             ) : (
               <div 
-                className="rounded-xl overflow-hidden"
+                className="rounded-xl overflow-hidden print:overflow-visible"
                 style={{ boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)" }}
               >
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto print:overflow-visible">
                   <table className="w-full" style={{ background: "rgba(255, 255, 255, 0.05)" }}>
                     <thead>
                       <tr style={{ background: "linear-gradient(135deg, #7965C1, #483AA0)" }}>
@@ -135,7 +313,7 @@ export default function Contacts() {
                         <th className="text-left px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white hidden lg:table-cell">Designation</th>
                         <th className="text-left px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white">Phone</th>
                         <th className="text-left px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white hidden md:table-cell">Email</th>
-                        <th className="text-center px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white">Actions</th>
+                        <th className="text-center px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white print:hidden">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -182,11 +360,12 @@ export default function Contacts() {
                               {contact.email}
                             </a>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 print:hidden">
                             <div className="flex items-center justify-center gap-2">
                               <button 
                                 className="p-2 rounded-lg transition-colors hover:bg-white/10"
                                 style={{ color: "#E3D095" }}
+                                onClick={() => handleEdit(contact, idx)}
                                 data-testid={`button-edit-${contact.id}`}
                               >
                                 <Edit2 className="w-4 h-4" />
@@ -194,6 +373,7 @@ export default function Contacts() {
                               <button 
                                 className="p-2 rounded-lg transition-colors hover:bg-white/10"
                                 style={{ color: "#DC3545" }}
+                                onClick={() => handleDelete(contact, idx)}
                                 data-testid={`button-delete-${contact.id}`}
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -212,6 +392,238 @@ export default function Contacts() {
       </main>
 
       <Footer />
+
+      <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
+        <DialogContent className="max-w-md" style={{ background: "#1A1E32", border: "1px solid rgba(121, 101, 193, 0.4)" }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: "#E3D095" }}>Add New Contact</DialogTitle>
+            <DialogDescription style={{ color: "rgba(227, 208, 149, 0.6)" }}>
+              Fill in the details to add a new contact.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...addForm}>
+            <form onSubmit={addForm.handleSubmit((data) => addMutation.mutate(data))} className="space-y-4">
+              <FormField
+                control={addForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel style={{ color: "#E3D095" }}>Full Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-contact-name" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={addForm.control}
+                  name="agency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel style={{ color: "#E3D095" }}>Agency</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-contact-agency" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={addForm.control}
+                  name="designation"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel style={{ color: "#E3D095" }}>Designation</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-contact-designation" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={addForm.control}
+                  name="phoneNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel style={{ color: "#E3D095" }}>Phone</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-contact-phone" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={addForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel style={{ color: "#E3D095" }}>Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" {...field} data-testid="input-contact-email" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={addForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel style={{ color: "#E3D095" }}>Address (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} data-testid="input-contact-address" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setAddModalOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={addMutation.isPending} style={{ background: "#6F42C1" }} data-testid="button-submit-add">
+                  {addMutation.isPending ? "Adding..." : "Add Contact"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="max-w-md" style={{ background: "#1A1E32", border: "1px solid rgba(121, 101, 193, 0.4)" }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: "#E3D095" }}>Edit Contact</DialogTitle>
+            <DialogDescription style={{ color: "rgba(227, 208, 149, 0.6)" }}>
+              Update the contact details.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form
+              onSubmit={editForm.handleSubmit((data) => {
+                if (selectedIndex !== null) updateMutation.mutate({ index: selectedIndex, data });
+              })}
+              className="space-y-4"
+            >
+              <FormField
+                control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel style={{ color: "#E3D095" }}>Full Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-contact-name" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="agency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel style={{ color: "#E3D095" }}>Agency</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-contact-agency" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="designation"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel style={{ color: "#E3D095" }}>Designation</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-contact-designation" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="phoneNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel style={{ color: "#E3D095" }}>Phone</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-contact-phone" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel style={{ color: "#E3D095" }}>Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" {...field} data-testid="input-edit-contact-email" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={editForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel style={{ color: "#E3D095" }}>Address (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} data-testid="input-edit-contact-address" className="bg-white/10 border-[rgba(121,101,193,0.4)] text-white" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditModalOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={updateMutation.isPending} style={{ background: "#6F42C1" }} data-testid="button-submit-edit">
+                  {updateMutation.isPending ? "Updating..." : "Update Contact"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent style={{ background: "#1A1E32", border: "1px solid rgba(121, 101, 193, 0.4)" }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle style={{ color: "#E3D095" }}>Delete Contact</AlertDialogTitle>
+            <AlertDialogDescription style={{ color: "rgba(227, 208, 149, 0.6)" }}>
+              Are you sure you want to delete "{selectedContact?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (selectedIndex !== null) deleteMutation.mutate(selectedIndex); }}
+              style={{ background: "#DC3545" }}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

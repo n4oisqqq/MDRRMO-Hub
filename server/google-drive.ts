@@ -4,8 +4,15 @@
 import { google } from 'googleapis';
 import type { DriveFolder, DriveFile, GalleryImage } from '@shared/schema';
 
-const ADMIN_MAPS_FOLDER_ID = process.env.GOOGLE_DRIVE_MAPS_FOLDER_ID || '1Pz2MM0Ge4RPQ6tdUORibYGoeKepJ9RSt';
 const DOCUMENTS_ROOT_FOLDER_ID = '15_xiFeXu_vdIe2CYrjGaRCAho2OqhGvo';
+
+const MAP_FOLDER_IDS = {
+  administrative: '1Wh2wSQuyzHiz25Vbr4ICETj18RRUEpvi',
+  topographic: '1Y01dJR_YJdixvsi_B9Xs7nQaXD31_Yn2',
+  'land-use': '1yQmtrKfKiMOFA933W0emzeGoexMpUDGM',
+  hazards: '16xy_oUAr6sWb3JE9eNrxYJdAMDRKGYLn',
+  other: '1MI1aO_-gQwsRbSJsfHY2FI4AOz9Jney1',
+};
 
 let connectionSettings: any = null;
 let lastFetchTime = 0;
@@ -138,51 +145,142 @@ export async function getDocumentFolders(): Promise<DriveFolder[]> {
   }
 }
 
-export async function getAdministrativeMaps(): Promise<DriveFolder[]> {
+export async function getMapFolderContents(mapType: keyof typeof MAP_FOLDER_IDS): Promise<DriveFolder[]> {
+  const folderId = MAP_FOLDER_IDS[mapType];
+  if (!folderId) {
+    throw new Error(`Unknown map type: ${mapType}`);
+  }
+
   try {
     const drive = await getGoogleDriveClient();
     
-    const response = await drive.files.list({
-      q: `'${ADMIN_MAPS_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    const foldersResponse = await drive.files.list({
+      q: `'${folderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       fields: 'files(id, name)',
-      pageSize: 50,
+      pageSize: 100,
+      orderBy: 'name',
     });
 
-    const folders = response.data.files || [];
+    const folders = foldersResponse.data.files || [];
     
-    if (folders.length === 0) {
-      console.warn('No administrative maps found in Drive');
-      return [];
+    const filesInRootResponse = await drive.files.list({
+      q: `'${folderId}' in parents and mimeType!='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id, name, mimeType, webViewLink, webContentLink, thumbnailLink)',
+      pageSize: 100,
+      orderBy: 'name',
+    });
+
+    const rootFiles = filesInRootResponse.data.files || [];
+
+    const result: DriveFolder[] = [];
+
+    if (rootFiles.length > 0) {
+      result.push({
+        id: folderId,
+        name: 'Root Files',
+        files: rootFiles.map(file => ({
+          id: file.id!,
+          name: file.name!,
+          mimeType: file.mimeType!,
+          webViewLink: file.webViewLink || undefined,
+          webContentLink: file.webContentLink || undefined,
+          thumbnailLink: file.thumbnailLink || undefined,
+        })),
+      });
     }
-    
-    const result: DriveFolder[] = await Promise.all(
+
+    const folderContents = await Promise.all(
       folders.map(async (folder) => {
         const filesResponse = await drive.files.list({
           q: `'${folder.id}' in parents and trashed=false`,
           fields: 'files(id, name, mimeType, webViewLink, webContentLink, thumbnailLink)',
+          pageSize: 100,
+        });
+
+        const subFoldersResponse = await drive.files.list({
+          q: `'${folder.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+          fields: 'files(id, name)',
           pageSize: 50,
         });
 
         return {
           id: folder.id!,
           name: folder.name!,
-          files: (filesResponse.data.files || []).map(file => ({
-            id: file.id!,
-            name: file.name!,
-            mimeType: file.mimeType!,
-            webViewLink: file.webViewLink || undefined,
-            webContentLink: file.webContentLink || undefined,
-            thumbnailLink: file.thumbnailLink || undefined,
+          files: (filesResponse.data.files || [])
+            .filter(f => f.mimeType !== 'application/vnd.google-apps.folder')
+            .map(file => ({
+              id: file.id!,
+              name: file.name!,
+              mimeType: file.mimeType!,
+              webViewLink: file.webViewLink || undefined,
+              webContentLink: file.webContentLink || undefined,
+              thumbnailLink: file.thumbnailLink || undefined,
+            })),
+          subfolders: (subFoldersResponse.data.files || []).map(sf => ({
+            id: sf.id!,
+            name: sf.name!,
           })),
         };
       })
     );
 
+    result.push(...folderContents);
+
     return result;
   } catch (error) {
-    console.error('Error fetching administrative maps from Google Drive:', error);
+    console.error(`Error fetching ${mapType} maps from Google Drive:`, error);
     throw error;
   }
+}
+
+export async function getSubfolderContents(folderId: string): Promise<DriveFolder> {
+  try {
+    const drive = await getGoogleDriveClient();
+    
+    const folderInfo = await drive.files.get({
+      fileId: folderId,
+      fields: 'id, name',
+    });
+
+    const filesResponse = await drive.files.list({
+      q: `'${folderId}' in parents and trashed=false`,
+      fields: 'files(id, name, mimeType, webViewLink, webContentLink, thumbnailLink)',
+      pageSize: 100,
+      orderBy: 'name',
+    });
+
+    const subFoldersResponse = await drive.files.list({
+      q: `'${folderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id, name)',
+      pageSize: 50,
+    });
+
+    return {
+      id: folderInfo.data.id!,
+      name: folderInfo.data.name!,
+      files: (filesResponse.data.files || [])
+        .filter(f => f.mimeType !== 'application/vnd.google-apps.folder')
+        .map(file => ({
+          id: file.id!,
+          name: file.name!,
+          mimeType: file.mimeType!,
+          webViewLink: file.webViewLink || undefined,
+          webContentLink: file.webContentLink || undefined,
+          thumbnailLink: file.thumbnailLink || undefined,
+        })),
+      subfolders: (subFoldersResponse.data.files || []).map(sf => ({
+        id: sf.id!,
+        name: sf.name!,
+      })),
+    };
+  } catch (error) {
+    console.error('Error fetching subfolder contents:', error);
+    throw error;
+  }
+}
+
+export async function getAdministrativeMaps(): Promise<DriveFolder[]> {
+  return getMapFolderContents('administrative');
 }
 
 export async function getGalleryFolders(): Promise<DriveFolder[]> {

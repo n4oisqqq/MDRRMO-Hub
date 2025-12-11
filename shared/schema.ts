@@ -112,9 +112,26 @@ export interface MapAsset {
 export interface MapLayer {
   id: string;
   name: string;
-  type: "interactive" | "administrative" | "topographic" | "land-use" | "hazards" | "touristic" | "street";
+  type: "interactive" | "administrative" | "topographic" | "land-use" | "hazards" | "other" | "google-open";
   active: boolean;
   opacity?: number;
+  folderId?: string;
+  expanded?: boolean;
+}
+
+export interface GoogleOpenMap {
+  id: string;
+  name: string;
+  iframeSrc: string;
+}
+
+export interface MapFileItem {
+  id: string;
+  name: string;
+  mimeType: string;
+  webViewLink?: string;
+  webContentLink?: string;
+  thumbnailLink?: string;
 }
 
 export interface InventoryStats {

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { getInventoryItems, getCalendarEvents, getCalendarTasks, getContacts } from "./google-sheets";
-import { getDocumentFolders, getGalleryFolders, getGalleryImages, getAdministrativeMaps } from "./google-drive";
+import { getDocumentFolders, getGalleryFolders, getGalleryImages, getAdministrativeMaps, getMapFolderContents, getSubfolderContents } from "./google-drive";
 import { getHazardZones, getMapAssets } from "./maps-data";
 
 export async function registerRoutes(
@@ -116,6 +116,57 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching administrative maps:", error);
       res.status(500).json({ error: "Failed to fetch administrative maps" });
+    }
+  });
+
+  app.get("/api/maps/topographic", async (req, res) => {
+    try {
+      const maps = await getMapFolderContents('topographic');
+      res.json(maps);
+    } catch (error) {
+      console.error("Error fetching topographic maps:", error);
+      res.status(500).json({ error: "Failed to fetch topographic maps" });
+    }
+  });
+
+  app.get("/api/maps/land-use", async (req, res) => {
+    try {
+      const maps = await getMapFolderContents('land-use');
+      res.json(maps);
+    } catch (error) {
+      console.error("Error fetching land use maps:", error);
+      res.status(500).json({ error: "Failed to fetch land use maps" });
+    }
+  });
+
+  app.get("/api/maps/hazards-files", async (req, res) => {
+    try {
+      const maps = await getMapFolderContents('hazards');
+      res.json(maps);
+    } catch (error) {
+      console.error("Error fetching hazard maps:", error);
+      res.status(500).json({ error: "Failed to fetch hazard maps" });
+    }
+  });
+
+  app.get("/api/maps/other", async (req, res) => {
+    try {
+      const maps = await getMapFolderContents('other');
+      res.json(maps);
+    } catch (error) {
+      console.error("Error fetching other maps:", error);
+      res.status(500).json({ error: "Failed to fetch other maps" });
+    }
+  });
+
+  app.get("/api/maps/subfolder/:folderId", async (req, res) => {
+    try {
+      const { folderId } = req.params;
+      const folder = await getSubfolderContents(folderId);
+      res.json(folder);
+    } catch (error) {
+      console.error("Error fetching subfolder contents:", error);
+      res.status(500).json({ error: "Failed to fetch subfolder contents" });
     }
   });
 

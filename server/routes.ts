@@ -1,8 +1,30 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { getInventoryItems, getCalendarEvents, getCalendarTasks, getContacts } from "./google-sheets";
+import { 
+  getInventoryItems, 
+  addInventoryItem, 
+  updateInventoryItem, 
+  deleteInventoryItem,
+  getCalendarEvents, 
+  addCalendarEvent,
+  updateCalendarEvent,
+  deleteCalendarEvent,
+  getCalendarTasks,
+  addCalendarTask,
+  updateCalendarTask,
+  deleteCalendarTask, 
+  getContacts,
+  addContact,
+  updateContact,
+  deleteContact,
+  getMapFrames,
+  addMapFrame,
+  updateMapFrame,
+  deleteMapFrame
+} from "./google-sheets";
 import { getDocumentFolders, getGalleryFolders, getGalleryImages, getAdministrativeMaps, getMapFolderContents, getSubfolderContents } from "./google-drive";
 import { getHazardZones, getMapAssets } from "./maps-data";
+import { insertInventorySchema, insertEventSchema, insertTaskSchema, insertContactSchema, insertMapFrameSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -20,7 +42,47 @@ export async function registerRoutes(
     }
   });
 
-  // Calendar API endpoints
+  app.post("/api/inventory", async (req, res) => {
+    try {
+      const parsed = insertInventorySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+      const item = await addInventoryItem(parsed.data);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Error adding inventory item:", error);
+      res.status(500).json({ error: "Failed to add inventory item" });
+    }
+  });
+
+  app.put("/api/inventory/:index", async (req, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      const parsed = insertInventorySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+      await updateInventoryItem(index, parsed.data);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating inventory item:", error);
+      res.status(500).json({ error: "Failed to update inventory item" });
+    }
+  });
+
+  app.delete("/api/inventory/:index", async (req, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      await deleteInventoryItem(index);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting inventory item:", error);
+      res.status(500).json({ error: "Failed to delete inventory item" });
+    }
+  });
+
+  // Calendar Events API endpoints
   app.get("/api/calendar/events", async (req, res) => {
     try {
       const events = await getCalendarEvents();
@@ -31,6 +93,47 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/calendar/events", async (req, res) => {
+    try {
+      const parsed = insertEventSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+      const event = await addCalendarEvent(parsed.data);
+      res.status(201).json(event);
+    } catch (error) {
+      console.error("Error adding calendar event:", error);
+      res.status(500).json({ error: "Failed to add calendar event" });
+    }
+  });
+
+  app.put("/api/calendar/events/:index", async (req, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      const parsed = insertEventSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+      await updateCalendarEvent(index, parsed.data);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating calendar event:", error);
+      res.status(500).json({ error: "Failed to update calendar event" });
+    }
+  });
+
+  app.delete("/api/calendar/events/:index", async (req, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      await deleteCalendarEvent(index);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting calendar event:", error);
+      res.status(500).json({ error: "Failed to delete calendar event" });
+    }
+  });
+
+  // Calendar Tasks API endpoints
   app.get("/api/calendar/tasks", async (req, res) => {
     try {
       const tasks = await getCalendarTasks();
@@ -38,6 +141,46 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching calendar tasks:", error);
       res.status(500).json({ error: "Failed to fetch calendar tasks" });
+    }
+  });
+
+  app.post("/api/calendar/tasks", async (req, res) => {
+    try {
+      const parsed = insertTaskSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+      const task = await addCalendarTask(parsed.data);
+      res.status(201).json(task);
+    } catch (error) {
+      console.error("Error adding calendar task:", error);
+      res.status(500).json({ error: "Failed to add calendar task" });
+    }
+  });
+
+  app.put("/api/calendar/tasks/:index", async (req, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      const parsed = insertTaskSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+      await updateCalendarTask(index, parsed.data);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating calendar task:", error);
+      res.status(500).json({ error: "Failed to update calendar task" });
+    }
+  });
+
+  app.delete("/api/calendar/tasks/:index", async (req, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      await deleteCalendarTask(index);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting calendar task:", error);
+      res.status(500).json({ error: "Failed to delete calendar task" });
     }
   });
 
@@ -49,6 +192,97 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching contacts:", error);
       res.status(500).json({ error: "Failed to fetch contacts" });
+    }
+  });
+
+  app.post("/api/contacts", async (req, res) => {
+    try {
+      const parsed = insertContactSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+      const contact = await addContact(parsed.data);
+      res.status(201).json(contact);
+    } catch (error) {
+      console.error("Error adding contact:", error);
+      res.status(500).json({ error: "Failed to add contact" });
+    }
+  });
+
+  app.put("/api/contacts/:index", async (req, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      const parsed = insertContactSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+      await updateContact(index, parsed.data);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating contact:", error);
+      res.status(500).json({ error: "Failed to update contact" });
+    }
+  });
+
+  app.delete("/api/contacts/:index", async (req, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      await deleteContact(index);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting contact:", error);
+      res.status(500).json({ error: "Failed to delete contact" });
+    }
+  });
+
+  // Map Frames API endpoints
+  app.get("/api/maps/frames", async (req, res) => {
+    try {
+      const frames = await getMapFrames();
+      res.json(frames);
+    } catch (error) {
+      console.error("Error fetching map frames:", error);
+      res.status(500).json({ error: "Failed to fetch map frames" });
+    }
+  });
+
+  app.post("/api/maps/frames", async (req, res) => {
+    try {
+      const parsed = insertMapFrameSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+      const frame = await addMapFrame(parsed.data);
+      res.status(201).json(frame);
+    } catch (error) {
+      console.error("Error adding map frame:", error);
+      res.status(500).json({ error: "Failed to add map frame" });
+    }
+  });
+
+  app.put("/api/maps/frames/:index", async (req, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      const parsed = insertMapFrameSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+      await updateMapFrame(index, parsed.data);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating map frame:", error);
+      res.status(500).json({ error: "Failed to update map frame" });
+    }
+  });
+
+  app.delete("/api/maps/frames/:index", async (req, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      await deleteMapFrame(index);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting map frame:", error);
+      res.status(500).json({ error: "Failed to delete map frame" });
     }
   });
 

@@ -156,3 +156,68 @@ export interface DashboardModule {
   color: string;
   route: string;
 }
+
+export interface MapFrame {
+  id: string;
+  name: string;
+  description: string;
+  type: "marker" | "layer" | "polygon";
+  coordinates: string;
+  color: string;
+  active: boolean;
+}
+
+export const insertInventorySchema = z.object({
+  itemName: z.string().min(1, "Item name is required"),
+  itemDescription: z.string().optional().default(""),
+  itemCategory: z.string().min(1, "Category is required"),
+  itemLocation: z.string().min(1, "Location is required"),
+  currentStock: z.number().min(0, "Stock must be 0 or greater"),
+  itemUnit: z.string().min(1, "Unit is required"),
+  itemStatus: z.enum(["In Stock", "Low Stock", "Out of Stock"]),
+});
+
+export type InsertInventoryItem = z.infer<typeof insertInventorySchema>;
+
+export const insertEventSchema = z.object({
+  eventName: z.string().min(1, "Event name is required"),
+  date: z.string().min(1, "Date is required"),
+  time: z.string().min(1, "Time is required"),
+  location: z.string().min(1, "Location is required"),
+  notes: z.string().optional().default(""),
+  priority: z.enum(["High", "Medium", "Low"]).optional().default("Medium"),
+});
+
+export type InsertCalendarEvent = z.infer<typeof insertEventSchema>;
+
+export const insertTaskSchema = z.object({
+  taskName: z.string().min(1, "Task name is required"),
+  dateTime: z.string().min(1, "Start date/time is required"),
+  deadlineDateTime: z.string().min(1, "Deadline is required"),
+  description: z.string().optional().default(""),
+  status: z.enum(["Upcoming", "Overdue", "Complete"]).optional().default("Upcoming"),
+});
+
+export type InsertCalendarTask = z.infer<typeof insertTaskSchema>;
+
+export const insertContactSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  agency: z.string().min(1, "Agency is required"),
+  designation: z.string().min(1, "Designation is required"),
+  phoneNumber: z.string().min(1, "Phone number is required"),
+  email: z.string().email("Valid email is required"),
+  address: z.string().optional().default(""),
+});
+
+export type InsertContact = z.infer<typeof insertContactSchema>;
+
+export const insertMapFrameSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional().default(""),
+  type: z.enum(["marker", "layer", "polygon"]),
+  coordinates: z.string().min(1, "Coordinates are required"),
+  color: z.string().min(1, "Color is required"),
+  active: z.boolean().optional().default(true),
+});
+
+export type InsertMapFrame = z.infer<typeof insertMapFrameSchema>;

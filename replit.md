@@ -136,3 +136,7 @@ Six main dashboard modules:
 - Added document file upload, folder creation, rename, and delete functionality
 - Added gallery bulk image upload with drag-and-drop support (up to 20 images)
 - Added image preview/download endpoint
+- Added Panorama Map module with 360-degree image viewer using Photo Sphere Viewer library
+  - Connected to Google Drive folder ID: 1tsbcsTEfg5RLHLJLYXR41avy9SrajsqM
+  - Displays panorama images with folder navigation and search
+  - Supports both normal and 360-degree viewing modes

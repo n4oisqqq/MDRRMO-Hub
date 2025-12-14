@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Header } from "@/components/header";
@@ -34,6 +34,7 @@ import {
   Trash2,
   ZoomIn,
   ZoomOut,
+  Copy,
 } from "lucide-react";
 import type {
   MapLayer,
@@ -178,9 +179,98 @@ export default function Maps() {
   const [featureDescription, setFeatureDescription] = useState("");
   const [showLegend, setShowLegend] = useState(true);
   const [mapZoom, setMapZoom] = useState(12);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [modalImageUrl, setModalImageUrl] = useState("");
+  const [modalImageName, setModalImageName] = useState("");
   const mapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const loadFeatures = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('map_features')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+          const features: MapFeature[] = data.map((f) => ({
+            id: f.id,
+            type: f.type,
+            coordinates: f.coordinates,
+            title: f.title,
+            description: f.description || undefined,
+            color: f.color,
+            fillColor: f.fill_color || undefined,
+            weight: f.weight || undefined,
+          }));
+          setMapFeatures(features);
+        }
+      } catch (error) {
+        console.error('Error loading map features:', error);
+      }
+    };
+
+    loadFeatures();
+  }, []);
+
+  const saveFeatureToDb = async (feature: MapFeature) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from('map_features')
+        .insert({
+          id: feature.id,
+          type: feature.type,
+          coordinates: feature.coordinates,
+          title: feature.title,
+          description: feature.description || null,
+          color: feature.color,
+          fill_color: feature.fillColor || null,
+          weight: feature.weight || null,
+          created_by: user?.id || null,
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving feature:', error);
+    }
+  };
+
+  const deleteFeatureFromDb = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('map_features')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting feature:', error);
+    }
+  };
+
+  const clearAllFeaturesFromDb = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        const { error } = await supabase
+          .from('map_features')
+          .delete()
+          .eq('created_by', user.id);
+
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error('Error clearing features:', error);
+    }
+  };
 
   const { data: hazardZones = [] } = useQuery<HazardZone[]>({
     queryKey: ["/api/maps/hazards"],
@@ -289,7 +379,10 @@ export default function Maps() {
           color: selectedColor,
         };
         setMapFeatures((prev) => [...prev, newFeature]);
+        saveFeatureToDb(newFeature);
         setDrawingMode(null);
+        setFeatureTitle("");
+        setFeatureDescription("");
       } else if (drawingMode === "polygon" || drawingMode === "line") {
         setTempCoordinates((prev) => [...prev, { lat, lng }]);
       }
@@ -311,6 +404,7 @@ export default function Maps() {
         fillColor: selectedFillColor,
       };
       setMapFeatures((prev) => [...prev, newFeature]);
+      saveFeatureToDb(newFeature);
     } else if (drawingMode === "line" && tempCoordinates.length >= 2) {
       const newFeature: MapFeature = {
         id: `line-${Date.now()}`,
@@ -322,10 +416,13 @@ export default function Maps() {
         weight: selectedWeight,
       };
       setMapFeatures((prev) => [...prev, newFeature]);
+      saveFeatureToDb(newFeature);
     }
 
     setTempCoordinates([]);
     setDrawingMode(null);
+    setFeatureTitle("");
+    setFeatureDescription("");
   }, [
     drawingMode,
     tempCoordinates,
@@ -343,10 +440,12 @@ export default function Maps() {
 
   const deleteFeature = useCallback((id: string) => {
     setMapFeatures((prev) => prev.filter((feature) => feature.id !== id));
+    deleteFeatureFromDb(id);
   }, []);
 
   const clearAllFeatures = useCallback(() => {
     setMapFeatures([]);
+    clearAllFeaturesFromDb();
   }, []);
 
   const handleLocateMe = useCallback(() => {
@@ -368,6 +467,66 @@ export default function Maps() {
   const handlePrint = useCallback(() => {
     window.print();
   }, []);
+
+  const openImageModal = useCallback((imageUrl: string, imageName: string) => {
+    setModalImageUrl(imageUrl);
+    setModalImageName(imageName);
+    setImageModalOpen(true);
+  }, []);
+
+  const closeImageModal = useCallback(() => {
+    setImageModalOpen(false);
+    setModalImageUrl("");
+    setModalImageName("");
+  }, []);
+
+  const handleCopyImage = useCallback(async () => {
+    if (!modalImageUrl) return;
+
+    try {
+      const response = await fetch(modalImageUrl);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob }),
+      ]);
+      alert("Image copied to clipboard!");
+    } catch (error) {
+      console.error("Failed to copy image:", error);
+      alert("Failed to copy image. Please try again.");
+    }
+  }, [modalImageUrl]);
+
+  const handleDownloadImage = useCallback(() => {
+    if (!modalImageUrl) return;
+
+    const link = document.createElement("a");
+    link.href = modalImageUrl;
+    link.download = modalImageName || "image.jpg";
+    link.click();
+  }, [modalImageUrl, modalImageName]);
+
+  const handlePrintImage = useCallback(() => {
+    if (!imageRef.current) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print ${modalImageName}</title>
+          <style>
+            body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+            img { max-width: 100%; height: auto; }
+          </style>
+        </head>
+        <body>
+          <img src="${modalImageUrl}" alt="${modalImageName}" onload="window.print(); window.close();" />
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }, [modalImageUrl, modalImageName]);
 
   const exportAsImage = useCallback(() => {
     if (!canvasRef.current || !mapRef.current) return;
@@ -1569,8 +1728,17 @@ export default function Maps() {
                         "=s1000",
                       )}
                       alt={selectedFile.name}
-                      className="max-w-full max-h-full object-contain rounded-lg"
+                      className="max-w-full max-h-full object-contain rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
                       style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}
+                      onClick={() =>
+                        openImageModal(
+                          selectedFile.thumbnailLink!.replace(
+                            "=s220",
+                            "=s1000",
+                          ),
+                          selectedFile.name,
+                        )
+                      }
                     />
                   ) : selectedFile.webViewLink ? (
                     <iframe
@@ -1624,10 +1792,21 @@ export default function Maps() {
                     {filteredFolders.flatMap((folder) =>
                       (folder.files || []).map((file) => {
                         const FileIcon = getFileIcon(file.mimeType);
+                        const isImage = file.mimeType.includes("image");
                         return (
                           <button
                             key={file.id}
-                            onClick={() => setSelectedFile(file)}
+                            onClick={() =>
+                              isImage && file.thumbnailLink
+                                ? openImageModal(
+                                    file.thumbnailLink.replace(
+                                      "=s220",
+                                      "=s1000",
+                                    ),
+                                    file.name,
+                                  )
+                                : setSelectedFile(file)
+                            }
                             className="p-4 rounded-xl text-left transition-all hover-elevate"
                             style={{
                               background: "rgba(14, 33, 72, 0.85)",
@@ -1635,8 +1814,7 @@ export default function Maps() {
                             }}
                             data-testid={`file-card-${file.id}`}
                           >
-                            {file.thumbnailLink &&
-                            file.mimeType.includes("image") ? (
+                            {file.thumbnailLink && isImage ? (
                               <div
                                 className="w-full h-32 rounded-lg mb-3 bg-cover bg-center"
                                 style={{
@@ -1748,6 +1926,100 @@ export default function Maps() {
           </div>
         </div>
       </main>
+
+      {imageModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0, 0, 0, 0.9)" }}
+          onClick={closeImageModal}
+        >
+          <div
+            className="relative max-w-7xl max-h-[90vh] w-full h-full flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="flex items-center justify-between p-4 rounded-t-xl"
+              style={{
+                background: "rgba(14, 33, 72, 0.95)",
+                backdropFilter: "blur(15px)",
+                border: "1px solid rgba(121, 101, 193, 0.4)",
+                borderBottom: "none",
+              }}
+            >
+              <h3
+                className="font-bold text-lg truncate"
+                style={{ color: "#E3D095" }}
+              >
+                {modalImageName}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyImage}
+                  className="p-2 rounded-lg transition-all hover-elevate"
+                  style={{
+                    background: "rgba(0, 163, 141, 0.2)",
+                    color: "#00A38D",
+                  }}
+                  title="Copy Image"
+                  data-testid="button-copy-image"
+                >
+                  <Copy className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleDownloadImage}
+                  className="p-2 rounded-lg transition-all hover-elevate"
+                  style={{
+                    background: "rgba(0, 163, 141, 0.2)",
+                    color: "#00A38D",
+                  }}
+                  title="Download Image"
+                  data-testid="button-download-image"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handlePrintImage}
+                  className="p-2 rounded-lg transition-all hover-elevate"
+                  style={{
+                    background: "rgba(0, 163, 141, 0.2)",
+                    color: "#00A38D",
+                  }}
+                  title="Print Image"
+                  data-testid="button-print-modal-image"
+                >
+                  <Printer className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={closeImageModal}
+                  className="p-2 rounded-lg transition-all hover-elevate"
+                  style={{ color: "#E3D095" }}
+                  title="Close"
+                  data-testid="button-close-modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div
+              className="flex-1 flex items-center justify-center p-8 rounded-b-xl overflow-auto"
+              style={{
+                background: "rgba(14, 33, 72, 0.95)",
+                backdropFilter: "blur(15px)",
+                border: "1px solid rgba(121, 101, 193, 0.4)",
+                borderTop: "none",
+              }}
+            >
+              <img
+                ref={imageRef}
+                src={modalImageUrl}
+                alt={modalImageName}
+                className="max-w-full max-h-full object-contain"
+                style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

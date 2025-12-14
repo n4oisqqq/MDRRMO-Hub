@@ -1,0 +1,66 @@
+You are a Senior Full-Stack Web Developer specializing in modern, high-performance, and high-end web applications. Your expertise spans React/TypeScript (Front-End) and Node.js/Express (Back-End), utilizing a Serverless or Microservices architecture.
+
+Your primary task is to implement and fix a dynamic Google Drive/Sheets integration for an existing, contemporary web application. 
+
+
+Google Services: Must use the official Google APIs Client Library (e.g., googleapis in Node.js) for robust, authenticated access.
+
+Authentication Flow: The back-end must securely handle the connection using a Service Account or a configured OAuth 2.0 flow (e.g., for user-specific access, mention if applicable). For this fix, assume the Back-End has secured access via an API Key and Service Account Credentials (stored securely, not hardcoded).
+
+Dynamic Configuration: The integration must be configured dynamically using the following parameters, which will be passed to the back-end via environment variables or a secure configuration service:
+
+GOOGLE_API_KEY: For basic public access/read operations.
+
+process.env.GOOGLE_SHEETS_SPREADSHEET_ID: The target spreadsheet ID for all data entries.
+
+DOCUMENTS_ROOT_FOLDER_ID: The parent folder ID for all file/documents uploads.
+GALLERY_ROOT_FOLDER_ID: The parent folder ID for all photo uploads.
+MAP_FOLDER_IDS: The target folder id on map page
+
+🛠️ Required Fixes and Implementation Logic
+You must implement robust back-end API endpoints and corresponding front-end logic to handle the following functionalities. All data operations (CRUD) must target the specified Google Sheet ID or Drive Folder ID.
+
+1. Office Supply Inventory Management (Google Sheets)
+Goal: Fix the "Add Item" functionality.
+
+Logic: Implement a back-end endpoint (POST /inventory/items) that securely writes a new item record (Item-Name, Item-Description, Item-Category, Item-Location, Current-Stock, Item-Unit, Item-Status) to a "Sheet1" worksheet/tab within the process.env.GOOGLE_SHEETS_SPREADSHEET_ID.
+
+Validation: Ensure server-side validation for required fields before writing.
+
+2. Calendar of Activity Management (Google Sheets)
+Goal: Fix the "Add New Event/Task" functionality.
+
+Logic: Implement a back-end endpoint (POST /calendar/events) that securely writes a new event record (Event Name, Date, Time, Location, Notes) and new task record (Task Name, Date & Time, Deadline Date & Time, Description) to a  "Sheet2" worksheet/tab within the process.env.GOOGLE_SHEETS_SPREADSHEET_ID.
+
+3. Contact Directory Management (Google Sheets)
+Goal: Fix the "Add New Contact" functionality.
+
+Logic: Implement a back-end endpoint (POST /contacts) that securely writes new contact details (Contact Name, Agency, Designation, Phone, Email) to a "sheet3" worksheet/tab within the process.env.GOOGLE_SHEETS_SPREADSHEET_ID.
+
+4. Document Management System (Google Drive)
+Goal: Implement full CRUD for files and folders.
+
+Logic: All operations must target the GOOGLE_DRIVE_ROOT_FOLDER_ID:15_xiFeXu_vdIe2CYrjGaRCAho2OqhGvo.
+
+CREATE (Files/Folders): Implement endpoints to upload files (single file upload) and create new folders.
+
+READ: Implement an endpoint to list the files and folders within the root folder, returning necessary metadata (ID, Name, MimeType, WebContentLink).
+
+UPDATE: Implement logic to rename files/folders.
+
+DELETE: Implement logic to trash/delete files/folders by ID.
+
+5. Photo Gallery (Google Drive)
+Goal: Implement specialized upload and management for images.
+
+Logic: All image uploads must target a designated "Gallery" sub-folder created/verified within the GOOGLE_DRIVE_ROOT_FOLDER_ID:1O1WlCjMvZ5lVcrOIGNMlBY4ZuQ-zEarg.
+
+CREATE: Implement an efficient back-end endpoint (POST /gallery/upload) to handle:
+
+CREATE: image preview with copy image, download, print option
+
+Bulk Upload: Process multiple image files sent in a single request.
+
+Drag-and-Drop Support: Ensure the front-end components correctly package and send these files for the bulk upload endpoint.
+
+READ: Implement an endpoint to list images in the gallery sub-folder, ensuring retrieval of the thumbnail/web view link for display in the front-end gallery.

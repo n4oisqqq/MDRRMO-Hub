@@ -37,7 +37,8 @@ import {
   renameDocumentFile,
   deleteDocumentFile,
   uploadGalleryImages,
-  getImageContent
+  getImageContent,
+  getPanoramaImages
 } from "./google-drive";
 import { getHazardZones, getMapAssets } from "./maps-data";
 import { insertInventorySchema, insertEventSchema, insertTaskSchema, insertContactSchema, insertMapFrameSchema } from "@shared/schema";
@@ -584,6 +585,32 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching subfolder contents:", error);
       res.status(500).json({ error: "Failed to fetch subfolder contents" });
+    }
+  });
+
+  // Panorama API endpoints
+  app.get("/api/panorama", async (req, res) => {
+    try {
+      const data = await getPanoramaImages();
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching panorama images:", error);
+      res.status(500).json({ error: "Failed to fetch panorama images" });
+    }
+  });
+
+  // Panorama image content for 360 viewer
+  app.get("/api/panorama/image/:imageId", async (req, res) => {
+    try {
+      const { imageId } = req.params;
+      const { buffer, mimeType, name } = await getImageContent(imageId);
+      
+      res.set("Content-Type", mimeType);
+      res.set("Cache-Control", "public, max-age=3600");
+      res.send(buffer);
+    } catch (error) {
+      console.error("Error getting panorama image:", error);
+      res.status(500).json({ error: "Failed to get panorama image" });
     }
   });
 

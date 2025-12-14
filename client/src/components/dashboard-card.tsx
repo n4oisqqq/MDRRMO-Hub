@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { ArrowRight, Package, Calendar, Users, FileText, Image, Map } from "lucide-react";
+import { ArrowRight, Package, Calendar, Users, FileText, Image, Map, Globe } from "lucide-react";
 import type { DashboardModule } from "@shared/schema";
 
 const iconMap: Record<string, any> = {
@@ -9,6 +9,7 @@ const iconMap: Record<string, any> = {
   "file-text": FileText,
   image: Image,
   map: Map,
+  globe: Globe,
 };
 
 interface DashboardCardProps {

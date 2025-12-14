@@ -17,6 +17,8 @@ const MAP_FOLDER_IDS = {
   other: "1MI1aO_-gQwsRbSJsfHY2FI4AOz9Jney1",
 };
 
+const PANORAMA_MAP_FOLDER_ID = "1tsbcsTEfg5RLHLJLYXR41avy9SrajsqM";
+
 async function getGoogleDriveClient() {
   const accessToken = await getGoogleDriveToken();
 
@@ -516,6 +518,102 @@ export async function uploadGalleryImages(
     return uploadedImages;
   } catch (error) {
     console.error("Error uploading gallery images:", error);
+    throw error;
+  }
+}
+
+// Get panorama folder contents with all images
+export async function getPanoramaImages(): Promise<{ folders: DriveFolder[]; allImages: GalleryImage[] }> {
+  try {
+    const drive = await getGoogleDriveClient();
+
+    // Get all images from the root panorama folder
+    const rootImagesResponse = await drive.files.list({
+      q: `'${PANORAMA_MAP_FOLDER_ID}' in parents and (mimeType contains 'image/') and trashed=false`,
+      fields: "files(id, name, thumbnailLink, webViewLink, webContentLink, description, createdTime)",
+      pageSize: 100,
+      orderBy: "name",
+    });
+
+    // Get subfolders
+    const foldersResponse = await drive.files.list({
+      q: `'${PANORAMA_MAP_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: "files(id, name)",
+      pageSize: 100,
+      orderBy: "name",
+    });
+
+    const folders = foldersResponse.data.files || [];
+    const allImages: GalleryImage[] = [];
+
+    // Add root folder images
+    const rootImages = (rootImagesResponse.data.files || []).map((file) => ({
+      id: file.id!,
+      name: file.name!,
+      thumbnailLink: file.thumbnailLink || undefined,
+      webViewLink: file.webViewLink || undefined,
+      webContentLink: file.webContentLink || undefined,
+      description: file.description || undefined,
+      createdTime: file.createdTime || undefined,
+      folder: PANORAMA_MAP_FOLDER_ID,
+    }));
+    allImages.push(...rootImages);
+
+    // Fetch images from each subfolder
+    const folderContents: DriveFolder[] = await Promise.all(
+      folders.map(async (folder) => {
+        const imagesResponse = await drive.files.list({
+          q: `'${folder.id}' in parents and (mimeType contains 'image/') and trashed=false`,
+          fields: "files(id, name, thumbnailLink, webViewLink, webContentLink, description, createdTime)",
+          pageSize: 100,
+          orderBy: "name",
+        });
+
+        const folderImages = (imagesResponse.data.files || []).map((file) => ({
+          id: file.id!,
+          name: file.name!,
+          thumbnailLink: file.thumbnailLink || undefined,
+          webViewLink: file.webViewLink || undefined,
+          webContentLink: file.webContentLink || undefined,
+          description: file.description || undefined,
+          createdTime: file.createdTime || undefined,
+          folder: folder.id!,
+        }));
+        allImages.push(...folderImages);
+
+        // Get sub-subfolders
+        const subFoldersResponse = await drive.files.list({
+          q: `'${folder.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+          fields: "files(id, name)",
+          pageSize: 50,
+        });
+
+        return {
+          id: folder.id!,
+          name: folder.name!,
+          files: folderImages,
+          subfolders: (subFoldersResponse.data.files || []).map((sf) => ({
+            id: sf.id!,
+            name: sf.name!,
+          })),
+        };
+      })
+    );
+
+    // Add root folder to the list
+    const result: DriveFolder[] = [];
+    if (rootImages.length > 0) {
+      result.push({
+        id: PANORAMA_MAP_FOLDER_ID,
+        name: "All Panoramas",
+        files: rootImages,
+      });
+    }
+    result.push(...folderContents);
+
+    return { folders: result, allImages };
+  } catch (error) {
+    console.error("Error fetching panorama images:", error);
     throw error;
   }
 }

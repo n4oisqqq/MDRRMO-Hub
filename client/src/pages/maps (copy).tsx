@@ -35,7 +35,6 @@ import {
   ZoomOut,
   Copy,
   Eye,
-  RotateCw,
 } from "lucide-react";
 import type {
   MapLayer,
@@ -189,7 +188,6 @@ export default function Maps() {
   const [modalImageName, setModalImageName] = useState("");
   const [panoramaImages, setPanoramaImages] = useState<DriveFile[]>([]);
   const [selectedPanorama, setSelectedPanorama] = useState<DriveFile | null>(null);
-  const [panoramaRotation, setPanoramaRotation] = useState(0);
   const mapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -304,7 +302,7 @@ export default function Maps() {
   const { data: panoramaData, isLoading: panoramaLoading } = useQuery<{
     files: DriveFile[];
   }>({
-    queryKey: ["panorama-folder", "1tsbcsTEfg5RLHLJLYXR41avy9SrajsqM"],
+    queryKey: ["panorama-folder"],
     queryFn: async () => {
       const response = await fetch(
         `/api/maps/drive-folder/1tsbcsTEfg5RLHLJLYXR41avy9SrajsqM`
@@ -313,20 +311,16 @@ export default function Maps() {
       return response.json();
     },
     enabled: activeLayer?.type === "panorama",
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
   useEffect(() => {
     if (panoramaData?.files) {
-      // Filter for image files that are likely panoramas
-      const images = panoramaData.files.filter(file => 
+      setPanoramaImages(panoramaData.files.filter(file => 
         file.mimeType.includes("image") && 
         (file.name.toLowerCase().includes("pano") || 
          file.name.toLowerCase().includes("360") ||
-         file.name.toLowerCase().includes("panorama") ||
-         file.name.toLowerCase().includes("equirectangular"))
-      );
-      setPanoramaImages(images);
+         file.name.toLowerCase().includes("panorama"))
+      ));
     }
   }, [panoramaData]);
 
@@ -362,7 +356,6 @@ export default function Maps() {
     setSelectedGoogleMap(null);
     setSubfolderContents({});
     setSelectedPanorama(null);
-    setPanoramaRotation(0);
   }, []);
 
   const toggleFolder = useCallback(
@@ -519,7 +512,6 @@ export default function Maps() {
     setModalImageUrl("");
     setModalImageName("");
     setSelectedPanorama(null);
-    setPanoramaRotation(0);
   }, []);
 
   const handleCopyImage = useCallback(async () => {
@@ -696,19 +688,6 @@ export default function Maps() {
     link.href = canvas.toDataURL("image/jpeg", 0.9);
     link.click();
   }, [mapFeatures, tempCoordinates, selectedColor]);
-
-  const rotatePanorama = useCallback((direction: 'left' | 'right') => {
-    setPanoramaRotation(prev => {
-      const newRotation = direction === 'left' 
-        ? prev - 45 
-        : prev + 45;
-      return (newRotation + 360) % 360;
-    });
-  }, []);
-
-  const resetPanoramaView = useCallback(() => {
-    setPanoramaRotation(0);
-  }, []);
 
   const filteredFolders = useMemo(() => {
     if (!searchQuery.trim()) return layerFolders;
@@ -973,7 +952,7 @@ export default function Maps() {
                               <span className="font-medium">Panorama Viewer</span>
                             </div>
                             <p className="text-xs opacity-80">
-                              Showing 360° panoramic images from Google Drive folder ID: 1tsbcsTEfg5RLHLJLYXR41avy9SrajsqM
+                              Showing 360° panoramic images from Google Drive
                             </p>
                           </div>
                         </div>
@@ -1428,60 +1407,22 @@ export default function Maps() {
                 {selectedPanorama ? (
                   <div className="flex-1 flex flex-col">
                     <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
-                      <h2 className="text-xl font-bold text-yellow-400 truncate max-w-md">
+                      <h2 className="text-xl font-bold text-yellow-400">
                         {selectedPanorama.name}
                       </h2>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => rotatePanorama('left')}
-                          className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700"
-                          title="Rotate Left"
-                        >
-                          <RotateCw className="w-5 h-5 rotate-180" />
-                        </button>
-                        <button
-                          onClick={resetPanoramaView}
-                          className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700"
-                          title="Reset View"
-                        >
-                          <RotateCw className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => rotatePanorama('right')}
-                          className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700"
-                          title="Rotate Right"
-                        >
-                          <RotateCw className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => setSelectedPanorama(null)}
-                          className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex-1 flex items-center justify-center p-4 bg-black relative overflow-hidden">
-                      <div 
-                        className="absolute inset-0 flex items-center justify-center"
-                        style={{ 
-                          transform: `rotateY(${panoramaRotation}deg)`,
-                          transition: 'transform 0.3s ease'
-                        }}
+                      <button
+                        onClick={() => setSelectedPanorama(null)}
+                        className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700"
                       >
-                        <img
-                          src={selectedPanorama.thumbnailLink?.replace("=s220", "=s2048") || selectedPanorama.webContentLink}
-                          alt={selectedPanorama.name}
-                          className="max-w-full max-h-full object-contain rounded-lg"
-                          style={{ 
-                            transform: 'scale(1.2)',
-                            transformOrigin: 'center'
-                          }}
-                        />
-                      </div>
-                      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800/80 px-4 py-2 rounded-full text-sm text-yellow-300">
-                        Drag to look around • Use rotation controls
-                      </div>
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex-1 flex items-center justify-center p-4 bg-black">
+                      <img
+                        src={selectedPanorama.thumbnailLink?.replace("=s220", "=s2048") || selectedPanorama.webContentLink}
+                        alt={selectedPanorama.name}
+                        className="max-w-full max-h-full object-contain rounded-lg"
+                      />
                     </div>
                   </div>
                 ) : (
@@ -1492,7 +1433,7 @@ export default function Maps() {
                           Panorama Images
                         </h2>
                         <p className="text-gray-300">
-                          360° panoramic views from Google Drive folder ID: 1tsbcsTEfg5RLHLJLYXR41avy9SrajsqM
+                          360° panoramic views from Google Drive folder
                         </p>
                       </div>
 
@@ -1504,7 +1445,7 @@ export default function Maps() {
                               onClick={() => setSelectedPanorama(image)}
                               className="group relative bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
                             >
-                              <div className="aspect-video bg-gray-700 flex items-center justify-center">
+                              <div className="aspect-square bg-gray-700 flex items-center justify-center">
                                 {image.thumbnailLink ? (
                                   <img
                                     src={image.thumbnailLink}
@@ -1541,12 +1482,8 @@ export default function Maps() {
                             No Panorama Images Found
                           </h3>
                           <p className="text-gray-400">
-                            There are no panoramic images in the Google Drive folder with ID: 1tsbcsTEfg5RLHLJLYXR41avy9SrajsqM
+                            There are no panoramic images in the Google Drive folder.
                           </p>
-                          <div className="mt-4 text-sm text-gray-500">
-                            <p>Make sure the folder contains equirectangular projection images</p>
-                            <p className="mt-1">Supported formats: JPG, PNG, WebP</p>
-                          </div>
                         </div>
                       )}
                     </div>
@@ -2092,7 +2029,7 @@ export default function Maps() {
                     {activeLayer?.type === "google-open"
                       ? "Select a map from the sidebar to view the interactive Google Map."
                       : activeLayer?.type === "panorama"
-                      ? "Loading panoramic images from Google Drive folder..."
+                      ? "Loading panoramic images from Google Drive..."
                       : "No files found in this map layer. Files from Google Drive will appear here when available."}
                   </p>
                 </div>

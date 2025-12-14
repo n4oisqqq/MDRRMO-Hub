@@ -50,7 +50,7 @@ export function Header({ title, showBack = false }: HeaderProps) {
               <img
                 src="https://res.cloudinary.com/dedcmctqk/image/upload/v1750079276/logome_h9snnx.webp"
                 alt="MDRRMO"
-                className="w-8 h-8 object-contain"
+                className="w-11 h-11 object-contain"
               />
             </div>
           </Link>

@@ -31,9 +31,15 @@ Preferred communication style: Simple, everyday language.
 - **Primary Data**: Google Sheets via Replit Connectors (google-sheet connector)
   - Inventory items, calendar events, tasks, and contacts stored in spreadsheet
   - Spreadsheet ID: 11uutE9iZ2BjddbFkeX9cQVFOouphdvyP000vh1lGOo4
+  - Sheet1: Inventory items (A2:G)
+  - Sheet2: Calendar events (A2:F) and tasks (H2:L)
+  - Sheet3: Contacts (A2:F)
+  - Sheet4: Map frames (A2:F)
 - **File Storage**: Google Drive via Replit Connectors (google-drive connector)
-  - Documents, photos, and map files organized in folder hierarchy
+  - Documents root folder: 15_xiFeXu_vdIe2CYrjGaRCAho2OqhGvo
+  - Gallery root folder: 1O1WlCjMvZ5lVcrOIGNMlBY4ZuQ-zEarg
   - Multiple folder IDs for different map types (administrative, topographic, hazards, etc.)
+- **Token Management**: Shared token manager (server/google-token-manager.ts) prevents race conditions
 - **User Data**: In-memory storage (MemStorage class) for user sessions
 - **Database Schema**: Drizzle ORM with PostgreSQL dialect configured but primarily uses Google integrations
 
@@ -77,3 +83,56 @@ Six main dashboard modules:
 - Radix UI: Accessible component primitives
 - date-fns: Date manipulation utilities
 - lucide-react: Icon library
+- multer: File upload handling middleware
+
+## API Endpoints
+
+### Inventory (Google Sheets)
+- GET /api/inventory - List all inventory items
+- POST /api/inventory - Add new inventory item
+- PUT /api/inventory/:index - Update inventory item
+- DELETE /api/inventory/:index - Delete inventory item
+
+### Calendar (Google Sheets)
+- GET /api/calendar/events - List all events
+- POST /api/calendar/events - Add new event
+- PUT /api/calendar/events/:index - Update event
+- DELETE /api/calendar/events/:index - Delete event
+- GET /api/calendar/tasks - List all tasks
+- POST /api/calendar/tasks - Add new task
+- PUT /api/calendar/tasks/:index - Update task
+- DELETE /api/calendar/tasks/:index - Delete task
+
+### Contacts (Google Sheets)
+- GET /api/contacts - List all contacts
+- POST /api/contacts - Add new contact
+- PUT /api/contacts/:index - Update contact
+- DELETE /api/contacts/:index - Delete contact
+
+### Documents (Google Drive)
+- GET /api/documents - List document folders and files
+- POST /api/documents/upload - Upload file (multipart/form-data with "file" field)
+- POST /api/documents/folders - Create new folder
+- PATCH /api/documents/:fileId - Rename file or folder
+- DELETE /api/documents/:fileId - Delete file or folder
+
+### Gallery (Google Drive)
+- GET /api/gallery/folders - List gallery folders
+- GET /api/gallery/images?folderId=X - List images in folder
+- POST /api/gallery/upload - Bulk upload images (multipart/form-data with "images" field, up to 20)
+- GET /api/gallery/images/:imageId/content - Get image for preview/download
+- PATCH /api/gallery/images/:imageId - Rename image
+- DELETE /api/gallery/images - Delete images (body: { imageIds: [] })
+
+### Maps
+- GET /api/maps/hazards - Get hazard zones
+- GET /api/maps/assets - Get map assets
+- GET /api/maps/frames - Get map frames from Google Sheets
+- GET /api/maps/:type - Get map folder contents (administrative, topographic, land-use, hazards, other)
+- GET /api/maps/subfolder/:folderId - Get subfolder contents
+
+## Recent Changes (December 2024)
+- Fixed token rate limiting by implementing shared token manager
+- Added document file upload, folder creation, rename, and delete functionality
+- Added gallery bulk image upload with drag-and-drop support (up to 20 images)
+- Added image preview/download endpoint

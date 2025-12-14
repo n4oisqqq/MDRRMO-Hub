@@ -206,7 +206,7 @@ export default function Gallery() {
   return (
     <div
       className="min-h-screen flex flex-col"
-      style={{ background: "linear-gradient(135deg, #f8f0fc, #e6e6fa)" }}
+      style={{ background: "linear-gradient(135deg, #FFDFE0, #FFF6F7)" }}
     >
       <BackgroundPattern />
       <Header title="PHOTO GALLERY" showBack />
@@ -216,19 +216,19 @@ export default function Gallery() {
           <div
             className="rounded-3xl p-6 md:p-8 shadow-2xl"
             style={{
-              background: "linear-gradient(135deg, #DDA0DD, #DA70D6)",
-              border: "1px solid #BA55D3",
+              background: "linear-gradient(135deg, #FFC9E, #FFDFE0)",
+              border: "1px solid #FEAE97",
             }}
           >
             <div
               className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-8 pb-6 border-b-2"
-              style={{ borderColor: "rgba(186, 85, 211, 0.5)" }}
+              style={{ borderColor: "rgba(254, 174, 151, 0.5)" }}
             >
               <div className="flex items-center gap-4">
                 <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center shadow-md"
                   style={{
-                    background: "linear-gradient(135deg, #9370DB, #8A2BE2)",
+                    background: "linear-gradient(135deg, #FEAE97, #FFC9E)",
                   }}
                 >
                   <FileText className="w-6 h-6 text-white" />
@@ -236,7 +236,7 @@ export default function Gallery() {
                 <h2
                   className="text-2xl md:text-3xl font-extrabold"
                   style={{
-                    color: "#4B0082",
+                    color: "#8B4513",
                     textShadow: "0 1px 2px rgba(255, 255, 255, 0.3)",
                   }}
                 >
@@ -247,21 +247,21 @@ export default function Gallery() {
                 value={searchQuery}
                 onChange={setSearchQuery}
                 placeholder="Search photos..."
-                className="bg-white/90 border-2 border-[#DDA0DD] focus:border-[#9370DB]"
+                className="bg-white/90 border-2 border-[#FFC9E] focus:border-[#FEAE97]"
               />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               <div
                 className="rounded-xl p-4 lg:col-span-1 shadow-inner"
-                style={{ background: "rgba(255, 255, 255, 0.3)" }}
+                style={{ background: "rgba(255, 255, 255, 0.5)" }}
               >
                 <h3
                   className="font-semibold mb-4 flex items-center gap-2"
-                  style={{ color: "#4B0082" }}
+                  style={{ color: "#8B4513" }}
                 >
-                  <Folder className="w-5 h-5" style={{ color: "#8A2BE2" }} />
-                  Categories
+                  <Folder className="w-5 h-5" style={{ color: "#FEAE97" }} />
+                  PHOTO ALBUMS
                 </h3>
 
                 {foldersLoading ? (
@@ -269,9 +269,9 @@ export default function Gallery() {
                 ) : folders.length === 0 ? (
                   <p
                     className="text-sm text-center py-8"
-                    style={{ color: "rgba(75, 0, 130, 0.7)" }}
+                    style={{ color: "rgba(139, 69, 19, 0.7)" }}
                   >
-                    No categories available
+                    No album available
                   </p>
                 ) : (
                   <div className="space-y-1">
@@ -286,7 +286,7 @@ export default function Gallery() {
                             <CollapsibleTrigger asChild>
                               <button
                                 className="p-1 hover:bg-white rounded transition-colors"
-                                style={{ color: "#4B0082" }}
+                                style={{ color: "#8B4513" }}
                               >
                                 {openFolders.has(folder.id) ? (
                                   <ChevronDown className="w-4 h-4" />
@@ -297,8 +297,8 @@ export default function Gallery() {
                             </CollapsibleTrigger>
                             <button
                               onClick={() => setSelectedFolder(folder.id)}
-                              className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-left ${selectedFolder === folder.id ? "bg-[#DDA0DD]/50" : "hover:bg-white/50"}`}
-                              style={{ color: "#4B0082" }}
+                              className={`flex-1 flex items-center gap-1 py-1 rounded-lg transition-colors text-left ${selectedFolder === folder.id ? "bg-[#FFC9E]/50" : "hover:bg-white/50"}`}
+                              style={{ color: "#8B4513" }}
                               data-testid={`folder-${folder.id}`}
                             >
                               <Folder
@@ -306,8 +306,8 @@ export default function Gallery() {
                                 style={{
                                   color:
                                     selectedFolder === folder.id
-                                      ? "#4B0082"
-                                      : "#9370DB",
+                                      ? "#8B4513"
+                                      : "#FEAE97",
                                 }}
                               />
                               <span className="text-sm font-medium truncate">
@@ -318,7 +318,7 @@ export default function Gallery() {
 
                           {folder.subfolders &&
                             folder.subfolders.length > 0 && (
-                              <CollapsibleContent className="ml-6 space-y-1">
+                              <CollapsibleContent className="ml-3 space-y-1">
                                 {folder.subfolders.map((subfolder) => (
                                   <Collapsible
                                     key={subfolder.id}
@@ -334,7 +334,7 @@ export default function Gallery() {
                                             <CollapsibleTrigger asChild>
                                               <button
                                                 className="p-1 hover:bg-white/50 rounded transition-colors"
-                                                style={{ color: "#4B0082" }}
+                                                style={{ color: "#8B4513" }}
                                               >
                                                 {openSubfolders.has(
                                                   subfolder.id,
@@ -350,8 +350,8 @@ export default function Gallery() {
                                           onClick={() =>
                                             setSelectedFolder(subfolder.id)
                                           }
-                                          className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-left ${selectedFolder === subfolder.id ? "bg-[#DDA0DD]/40" : "hover:bg-white/50"} ${!(subfolder.subfolders && subfolder.subfolders.length > 0) ? "ml-5" : ""}`}
-                                          style={{ color: "#4B0082" }}
+                                          className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-left ${selectedFolder === subfolder.id ? "bg-[#FFC9E]/40" : "hover:bg-white/50"} ${!(subfolder.subfolders && subfolder.subfolders.length > 0) ? "ml-5" : ""}`}
+                                          style={{ color: "#8B4513" }}
                                           data-testid={`subfolder-${subfolder.id}`}
                                         >
                                           <Folder
@@ -359,8 +359,8 @@ export default function Gallery() {
                                             style={{
                                               color:
                                                 selectedFolder === subfolder.id
-                                                  ? "#4B0082"
-                                                  : "#9370DB",
+                                                  ? "#8B4513"
+                                                  : "#FEAE97",
                                             }}
                                           />
                                           <span className="text-sm font-medium truncate">
@@ -381,8 +381,8 @@ export default function Gallery() {
                                                       childFolder.id,
                                                     )
                                                   }
-                                                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-left ${selectedFolder === childFolder.id ? "bg-[#DDA0DD]/30" : "hover:bg-white/40"}`}
-                                                  style={{ color: "#4B0082" }}
+                                                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-left ${selectedFolder === childFolder.id ? "bg-[#FFC9E]/30" : "hover:bg-white/40"}`}
+                                                  style={{ color: "#8B4513" }}
                                                   data-testid={`child-folder-${childFolder.id}`}
                                                 >
                                                   <Folder
@@ -391,8 +391,8 @@ export default function Gallery() {
                                                       color:
                                                         selectedFolder ===
                                                         childFolder.id
-                                                          ? "#4B0082"
-                                                          : "#9370DB",
+                                                          ? "#8B4513"
+                                                          : "#FEAE97",
                                                     }}
                                                   />
                                                   <span className="text-sm font-medium truncate">
@@ -419,8 +419,8 @@ export default function Gallery() {
                 {!selectedFolder ? (
                   <EmptyState
                     icon={Folder}
-                    title="Select a category"
-                    description="Choose a photo category from the sidebar to view its images."
+                    title="Select a album"
+                    description="Choose a photo album from the sidebar to view its images."
                   />
                 ) : imagesLoading ? (
                   <LoadingSpinner message="Loading images..." />
@@ -431,7 +431,7 @@ export default function Gallery() {
                     description={
                       searchQuery
                         ? "Try adjusting your search."
-                        : "This category has no images yet."
+                        : "This photo album has no images yet."
                     }
                   />
                 ) : (
@@ -443,8 +443,8 @@ export default function Gallery() {
                         className="group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl shadow-md"
                         style={{
                           background:
-                            "linear-gradient(135deg, #E6E6FA, #DDA0DD)",
-                          border: "1px solid #BA55D3",
+                            "linear-gradient(135deg, #FFF6F7, #FFDFE0)",
+                          border: "1px solid #FEAE97",
                         }}
                         data-testid={`image-card-${image.id}`}
                       >
@@ -461,7 +461,7 @@ export default function Gallery() {
                           className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end"
                           style={{
                             background:
-                              "linear-gradient(to top, rgba(75, 0, 130, 0.8) 0%, transparent 50%)",
+                              "linear-gradient(to top, rgba(139, 69, 19, 0.8) 0%, transparent 50%)",
                           }}
                         >
                           <div className="p-3 w-full">

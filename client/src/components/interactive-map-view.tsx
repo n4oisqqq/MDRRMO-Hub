@@ -1,5 +1,5 @@
-import { useRef, useCallback } from "react";
-import { MapPinned } from "lucide-react";
+import { useRef, useCallback, useState, useEffect } from "react";
+import { MapPinned, Move, ZoomIn, ZoomOut } from "lucide-react";
 import {
   MapDrawingToolbar,
   DrawingControlsPanel,
@@ -8,8 +8,10 @@ import {
   type DrawingMode,
 } from "./map-drawing-tools";
 
-const DEFAULT_CENTER = { lat: 13.0752, lng: 123.5298 };
-const MAP_SCALE = 0.1;
+const DEFAULT_CENTER = { lat: 13.03826, lng: 123.44719 };
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 18;
+const ZOOM_STEP = 0.5;
 
 interface InteractiveMapViewProps {
   mapFeatures: MapFeature[];
@@ -64,24 +66,58 @@ export function InteractiveMapView({
 }: InteractiveMapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [zoomLevel, setZoomLevel] = useState(14);
+  const [panStart, setPanStart] = useState<{ x: number; y: number } | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
 
-  const coordToPixel = useCallback(
-    (coord: { lat: number; lng: number }, rect: DOMRect) => {
-      const x = ((coord.lng - DEFAULT_CENTER.lng) / MAP_SCALE + 0.5) * rect.width;
-      const y = (0.5 - (coord.lat - DEFAULT_CENTER.lat) / MAP_SCALE) * rect.height;
-      return { x, y };
-    },
-    []
-  );
+  // Convert lat/lng to tile coordinates
+  const latLngToTile = useCallback((lat: number, lng: number, zoom: number) => {
+    const latRad = lat * Math.PI / 180;
+    const n = Math.pow(2, zoom);
+    const x = (lng + 180) / 360 * n;
+    const y = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
+    return { x, y };
+  }, []);
 
-  const pixelToCoord = useCallback(
-    (x: number, y: number, rect: DOMRect) => {
-      const lat = DEFAULT_CENTER.lat + (0.5 - y / rect.height) * MAP_SCALE;
-      const lng = DEFAULT_CENTER.lng + (x / rect.width - 0.5) * MAP_SCALE;
-      return { lat, lng };
-    },
-    []
-  );
+  // Convert tile coordinates to lat/lng
+  const tileToLatLng = useCallback((x: number, y: number, zoom: number) => {
+    const n = Math.pow(2, zoom);
+    const lng = x / n * 360 - 180;
+    const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n)));
+    const lat = latRad * 180 / Math.PI;
+    return { lat, lng };
+  }, []);
+
+  // Convert lat/lng to pixel coordinates
+  const latLngToPixel = useCallback((lat: number, lng: number, zoom: number, rect: DOMRect) => {
+    const centerTile = latLngToTile(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, zoom);
+    const pointTile = latLngToTile(lat, lng, zoom);
+
+    // Calculate pixel position relative to center
+    const tileSize = 256;
+    const x = (pointTile.x - centerTile.x) * tileSize + rect.width / 2 + offset.x;
+    const y = (pointTile.y - centerTile.y) * tileSize + rect.height / 2 + offset.y;
+
+    return { x, y };
+  }, [offset, latLngToTile]);
+
+  // Convert pixel coordinates to lat/lng
+  const pixelToLatLng = useCallback((x: number, y: number, zoom: number, rect: DOMRect) => {
+    const centerTile = latLngToTile(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, zoom);
+
+    // Adjust for offset and center
+    const tileSize = 256;
+    const adjustedX = x - offset.x;
+    const adjustedY = y - offset.y;
+
+    const tileX = (adjustedX - rect.width / 2) / tileSize + centerTile.x;
+    const tileY = (adjustedY - rect.height / 2) / tileSize + centerTile.y;
+
+    return tileToLatLng(tileX, tileY, zoom);
+  }, [offset, latLngToTile, tileToLatLng]);
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -89,19 +125,85 @@ export function InteractiveMapView({
       const rect = mapRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      setMouseCoords(pixelToCoord(x, y, rect));
+      const coords = pixelToLatLng(x, y, zoomLevel, rect);
+      setMouseCoords(coords);
+
+      // Handle panning
+      if (panStart && isPanning) {
+        const deltaX = e.clientX - panStart.x;
+        const deltaY = e.clientY - panStart.y;
+        setOffset(prev => ({
+          x: prev.x + deltaX,
+          y: prev.y + deltaY
+        }));
+        setPanStart({ x: e.clientX, y: e.clientY });
+      }
     },
-    [pixelToCoord, setMouseCoords]
+    [pixelToLatLng, setMouseCoords, panStart, isPanning, zoomLevel]
+  );
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button === 1 || (e.button === 0 && e.ctrlKey)) { // Middle click or Ctrl+Left click
+        e.preventDefault();
+        setPanStart({ x: e.clientX, y: e.clientY });
+        setIsPanning(true);
+      } else if (drawingMode === "select" && !isPanning) {
+        // Feature selection logic
+        if (!mapRef.current) return;
+        const rect = mapRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const clickedCoord = pixelToLatLng(x, y, zoomLevel, rect);
+
+        // Find closest feature within tolerance
+        const tolerance = 10;
+        let closestFeature: MapFeature | null = null;
+        let minDistance = Infinity;
+
+        mapFeatures.forEach(feature => {
+          if (feature.type === "marker") {
+            const { x: fx, y: fy } = latLngToPixel(feature.coordinates[0].lat, feature.coordinates[0].lng, zoomLevel, rect);
+            const distance = Math.sqrt(Math.pow(fx - x, 2) + Math.pow(fy - y, 2));
+            if (distance < tolerance && distance < minDistance) {
+              minDistance = distance;
+              closestFeature = feature;
+            }
+          }
+        });
+
+        setSelectedFeature(closestFeature ? closestFeature.id : null);
+      }
+    },
+    [drawingMode, pixelToLatLng, latLngToPixel, mapFeatures, isPanning, zoomLevel]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    if (isPanning) {
+      setIsPanning(false);
+      setPanStart(null);
+    }
+  }, [isPanning]);
+
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      if (!mapRef.current) return;
+
+      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+      setZoomLevel(prev => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev + delta)));
+    },
+    []
   );
 
   const handleMapClick = useCallback(
     (e: React.MouseEvent) => {
-      if (!mapRef.current || !drawingMode) return;
+      if (!mapRef.current || !drawingMode || isPanning) return;
 
       const rect = mapRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      const coord = pixelToCoord(x, y, rect);
+      const coord = pixelToLatLng(x, y, zoomLevel, rect);
 
       if (drawingMode === "marker") {
         const newFeature: MapFeature = {
@@ -126,13 +228,15 @@ export function InteractiveMapView({
       featureTitle,
       featureDescription,
       selectedColor,
-      pixelToCoord,
+      pixelToLatLng,
       setMapFeatures,
       onSaveFeature,
       setDrawingMode,
       setFeatureTitle,
       setFeatureDescription,
       setTempCoordinates,
+      isPanning,
+      zoomLevel
     ]
   );
 
@@ -229,7 +333,7 @@ export function InteractiveMapView({
     mapFeatures.forEach((feature) => {
       if (feature.type === "marker" && feature.coordinates.length > 0) {
         const coord = feature.coordinates[0];
-        const { x, y } = coordToPixel(coord, rect);
+        const { x, y } = latLngToPixel(coord.lat, coord.lng, zoomLevel, rect);
 
         ctx.beginPath();
         ctx.arc(x, y, 10, 0, 2 * Math.PI);
@@ -240,11 +344,11 @@ export function InteractiveMapView({
         ctx.stroke();
       } else if (feature.type === "polygon" && feature.coordinates.length >= 3) {
         ctx.beginPath();
-        const first = coordToPixel(feature.coordinates[0], rect);
+        const first = latLngToPixel(feature.coordinates[0].lat, feature.coordinates[0].lng, zoomLevel, rect);
         ctx.moveTo(first.x, first.y);
 
         for (let i = 1; i < feature.coordinates.length; i++) {
-          const point = coordToPixel(feature.coordinates[i], rect);
+          const point = latLngToPixel(feature.coordinates[i].lat, feature.coordinates[i].lng, zoomLevel, rect);
           ctx.lineTo(point.x, point.y);
         }
 
@@ -256,11 +360,11 @@ export function InteractiveMapView({
         ctx.stroke();
       } else if (feature.type === "line" && feature.coordinates.length >= 2) {
         ctx.beginPath();
-        const first = coordToPixel(feature.coordinates[0], rect);
+        const first = latLngToPixel(feature.coordinates[0].lat, feature.coordinates[0].lng, zoomLevel, rect);
         ctx.moveTo(first.x, first.y);
 
         for (let i = 1; i < feature.coordinates.length; i++) {
-          const point = coordToPixel(feature.coordinates[i], rect);
+          const point = latLngToPixel(feature.coordinates[i].lat, feature.coordinates[i].lng, zoomLevel, rect);
           ctx.lineTo(point.x, point.y);
         }
 
@@ -276,7 +380,70 @@ export function InteractiveMapView({
     link.download = `map-export-${Date.now()}.png`;
     link.href = canvas.toDataURL();
     link.click();
-  }, [mapFeatures, coordToPixel]);
+  }, [mapFeatures, latLngToPixel, zoomLevel]);
+
+  const resetView = useCallback(() => {
+    setZoomLevel(14);
+    setOffset({ x: 0, y: 0 });
+  }, []);
+
+  const zoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(MAX_ZOOM, prev + ZOOM_STEP));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(MIN_ZOOM, prev - ZOOM_STEP));
+  }, []);
+
+  // Generate ESRI World Imagery tile URLs
+  const getTileUrl = useCallback((x: number, y: number, z: number) => {
+    return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+  }, []);
+
+  // Calculate visible tiles
+  const getVisibleTiles = useCallback(() => {
+    if (!mapRef.current) return [];
+
+    const rect = mapRef.current.getBoundingClientRect();
+    const tileSize = 256;
+    const tilesPerRow = Math.ceil(rect.width / tileSize) + 2;
+    const tilesPerCol = Math.ceil(rect.height / tileSize) + 2;
+
+    const centerTile = latLngToTile(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, zoomLevel);
+    const startCol = Math.floor(centerTile.x - tilesPerRow / 2);
+    const startRow = Math.floor(centerTile.y - tilesPerCol / 2);
+
+    const tiles = [];
+    for (let x = 0; x < tilesPerRow; x++) {
+      for (let y = 0; y < tilesPerCol; y++) {
+        const tileX = startCol + x;
+        const tileY = startRow + y;
+        const wrapX = ((tileX % Math.pow(2, zoomLevel)) + Math.pow(2, zoomLevel)) % Math.pow(2, zoomLevel);
+        const wrapY = tileY;
+
+        if (wrapY >= 0 && wrapY < Math.pow(2, zoomLevel)) {
+          tiles.push({
+            x: tileX,
+            y: tileY,
+            url: getTileUrl(wrapX, wrapY, zoomLevel),
+            left: (x - tilesPerRow / 2) * tileSize + rect.width / 2 + offset.x,
+            top: (y - tilesPerCol / 2) * tileSize + rect.height / 2 + offset.y
+          });
+        }
+      }
+    }
+
+    return tiles;
+  }, [zoomLevel, offset, latLngToTile, getTileUrl]);
+
+  const visibleTiles = getVisibleTiles();
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [handleMouseUp]);
 
   return (
     <div className="relative w-full h-full">
@@ -286,6 +453,9 @@ export function InteractiveMapView({
         drawingMode={drawingMode}
         setDrawingMode={setDrawingMode}
         onExport={exportAsImage}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onResetView={resetView}
       />
 
       <DrawingControlsPanel
@@ -307,33 +477,68 @@ export function InteractiveMapView({
 
       <div
         ref={mapRef}
-        className="w-full h-full cursor-crosshair"
+        className="w-full h-full cursor-crosshair relative overflow-hidden"
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onWheel={handleWheel}
         style={{
-          background:
-            "linear-gradient(135deg, #1A1E32 0%, #0E2148 50%, #1A1E32 100%)",
+          background: "#7fbfff",
         }}
         data-testid="interactive-map-canvas"
       >
-        <svg className="absolute inset-0 w-full h-full pointer-events-none">
-          <defs>
-            <pattern
-              id="grid"
-              width="50"
-              height="50"
-              patternUnits="userSpaceOnUse"
-            >
-              <path
-                d="M 50 0 L 0 0 0 50"
-                fill="none"
-                stroke="rgba(255, 255, 255, 0.1)"
-                strokeWidth="1"
-              />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
+        {/* ESRI World Imagery Tiles */}
+        {visibleTiles.map((tile, index) => (
+          <img
+            key={`${tile.x}-${tile.y}-${zoomLevel}-${index}`}
+            src={tile.url}
+            alt=""
+            className="absolute"
+            style={{
+              left: `${tile.left}px`,
+              top: `${tile.top}px`,
+              width: "256px",
+              height: "256px",
+              imageRendering: "pixelated",
+            }}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        ))}
 
+        <div className="absolute top-4 left-4 z-10 flex gap-2">
+          <button
+            className="p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            onClick={zoomIn}
+            title="Zoom In"
+          >
+            <ZoomIn size={20} />
+          </button>
+          <button
+            className="p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            onClick={zoomOut}
+            title="Zoom Out"
+          >
+            <ZoomOut size={20} />
+          </button>
+          <button
+            className="p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            onClick={resetView}
+            title="Reset View"
+          >
+            <Move size={20} />
+          </button>
+        </div>
+
+        <svg 
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          style={{
+            transform: `translate(${offset.x}px, ${offset.y}px)`,
+          }}
+        >
           {mapFeatures.map((feature) => {
             if (!mapRef.current) return null;
             const rect = mapRef.current.getBoundingClientRect();
@@ -341,7 +546,7 @@ export function InteractiveMapView({
             if (feature.type === "polygon" && feature.coordinates.length >= 3) {
               const points = feature.coordinates
                 .map((coord) => {
-                  const { x, y } = coordToPixel(coord, rect);
+                  const { x, y } = latLngToPixel(coord.lat, coord.lng, zoomLevel, rect);
                   return `${x},${y}`;
                 })
                 .join(" ");
@@ -353,6 +558,7 @@ export function InteractiveMapView({
                   fill={feature.fillColor || feature.color + "40"}
                   stroke={feature.color}
                   strokeWidth="2"
+                  className={selectedFeature === feature.id ? "stroke-2" : ""}
                 />
               );
             }
@@ -360,7 +566,7 @@ export function InteractiveMapView({
             if (feature.type === "line" && feature.coordinates.length >= 2) {
               const points = feature.coordinates
                 .map((coord) => {
-                  const { x, y } = coordToPixel(coord, rect);
+                  const { x, y } = latLngToPixel(coord.lat, coord.lng, zoomLevel, rect);
                   return `${x},${y}`;
                 })
                 .join(" ");
@@ -374,6 +580,7 @@ export function InteractiveMapView({
                   strokeWidth={feature.weight || 3}
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  className={selectedFeature === feature.id ? "stroke-2" : ""}
                 />
               );
             }
@@ -385,7 +592,7 @@ export function InteractiveMapView({
             const rect = mapRef.current.getBoundingClientRect();
             const points = tempCoordinates
               .map((coord) => {
-                const { x, y } = coordToPixel(coord, rect);
+                const { x, y } = latLngToPixel(coord.lat, coord.lng, zoomLevel, rect);
                 return `${x},${y}`;
               })
               .join(" ");
@@ -410,7 +617,7 @@ export function InteractiveMapView({
                   />
                 )}
                 {tempCoordinates.map((coord, index) => {
-                  const { x, y } = coordToPixel(coord, rect);
+                  const { x, y } = latLngToPixel(coord.lat, coord.lng, zoomLevel, rect);
                   return (
                     <circle
                       key={index}
@@ -433,12 +640,12 @@ export function InteractiveMapView({
           .map((feature) => {
             if (!mapRef.current) return null;
             const rect = mapRef.current.getBoundingClientRect();
-            const { x, y } = coordToPixel(feature.coordinates[0], rect);
+            const { x, y } = latLngToPixel(feature.coordinates[0].lat, feature.coordinates[0].lng, zoomLevel, rect);
 
             return (
               <div
                 key={feature.id}
-                className="absolute transform -translate-x-1/2 -translate-y-full pointer-events-auto"
+                className={`absolute transform -translate-x-1/2 -translate-y-full pointer-events-auto ${selectedFeature === feature.id ? 'scale-110' : ''} transition-transform`}
                 style={{
                   left: `${x}px`,
                   top: `${y}px`,
@@ -446,23 +653,41 @@ export function InteractiveMapView({
               >
                 <div className="relative group">
                   <MapPinned
-                    className="w-8 h-8 drop-shadow-lg"
-                    style={{ color: feature.color }}
+                    className="w-8 h-8 drop-shadow-lg cursor-pointer"
+                    style={{ 
+                      color: feature.color,
+                      filter: selectedFeature === feature.id ? 'drop-shadow(0 0 8px white)' : 'none'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFeature(feature.id);
+                    }}
                   />
                   <div
-                    className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 rounded-lg text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
                     style={{
                       background: "rgba(14, 33, 72, 0.95)",
                       color: "#E3D095",
                       border: "1px solid rgba(121, 101, 193, 0.4)",
+                      minWidth: "150px",
+                      maxWidth: "300px",
+                      wordWrap: "break-word"
                     }}
                   >
-                    {feature.title}
+                    <div className="font-bold truncate">{feature.title}</div>
+                    {feature.description && (
+                      <div className="mt-1 text-xs">{feature.description}</div>
+                    )}
                   </div>
                 </div>
               </div>
             );
           })}
+
+          {/* Zoom level indicator */}
+          <div className="absolute bottom-4 right-4 bg-black/50 text-white px-3 py-1 rounded-lg">
+            Zoom: {zoomLevel.toFixed(1)}x
+          </div>
       </div>
 
       <MapLegend
@@ -471,6 +696,8 @@ export function InteractiveMapView({
         setShowLegend={setShowLegend}
         onClearAll={onClearAll}
         onDeleteFeature={onDeleteFeature}
+        selectedFeature={selectedFeature}
+        onSelectFeature={setSelectedFeature}
       />
     </div>
   );

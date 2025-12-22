@@ -95,6 +95,16 @@ const getFileIcon = (mimeType: string) => {
   return File;
 };
 
+const PANORAMA_VIEW_TYPES = [
+  { value: "360-degree", label: "360-Degree" },
+  { value: "spherical", label: "Spherical" },
+  { value: "cylindrical", label: "Cylindrical" },
+  { value: "horizontal", label: "Horizontal" },
+  { value: "vertical", label: "Vertical" },
+  { value: "wide-angle", label: "Wide-Angle" },
+  { value: "planar", label: "Planar" },
+];
+
 export default function Maps() {
   const [layers, setLayers] = useState<MapLayer[]>(MAP_LAYERS);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -105,7 +115,7 @@ export default function Maps() {
   const [selectedFile, setSelectedFile] = useState<DriveFile | null>(null);
   const [subfolderContents, setSubfolderContents] = useState<Record<string, DriveFolder>>({});
   const [loadingSubfolder, setLoadingSubfolder] = useState<string | null>(null);
-  
+
   // Drawing state
   const [mapFeatures, setMapFeatures] = useState<MapFeature[]>([]);
   const [drawingMode, setDrawingMode] = useState<DrawingMode>(null);
@@ -116,20 +126,29 @@ export default function Maps() {
   const [featureTitle, setFeatureTitle] = useState("");
   const [featureDescription, setFeatureDescription] = useState("");
   const [showLegend, setShowLegend] = useState(true);
-  
+
   // Modal state
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [modalImageUrl, setModalImageUrl] = useState("");
   const [modalImageName, setModalImageName] = useState("");
-  
+
   // Panorama state
   const [panoramaImages, setPanoramaImages] = useState<DriveFile[]>([]);
   const [selectedPanorama, setSelectedPanorama] = useState<DriveFile | null>(null);
   const [selectedPanoramaFolder, setSelectedPanoramaFolder] = useState<string | null>(null);
   const [panoramaViewerReady, setPanoramaViewerReady] = useState(false);
+  const [panoramaViewType, setPanoramaViewType] = useState<string>("360-degree");
+  const [panoramaSettings, setPanoramaSettings] = useState({
+    yaw: 0,
+    pitch: 0,
+    zoom: 1,
+    fov: 90,
+  });
   const panoramaViewerRef = useRef<HTMLDivElement>(null);
   const viewerInstanceRef = useRef<any>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const planarImageRef = useRef<HTMLImageElement>(null);
+  const threeSixtyRef = useRef<any>(null);
 
   const saveFeatureToDb = useCallback(async (feature: MapFeature) => {
     // Feature saving logic - can be expanded for persistence
@@ -206,9 +225,7 @@ export default function Maps() {
 
     const initViewer = async () => {
       try {
-        const { Viewer } = await import("@photo-sphere-viewer/core");
-        await import("@photo-sphere-viewer/core/index.css");
-
+        // Clean up previous viewer
         if (viewerInstanceRef.current) {
           viewerInstanceRef.current.destroy();
           viewerInstanceRef.current = null;
@@ -216,18 +233,94 @@ export default function Maps() {
 
         const panoramaUrl = `/api/panorama/image/${selectedPanorama.id}`;
 
-        viewerInstanceRef.current = new Viewer({
-          container: panoramaViewerRef.current,
-          panorama: panoramaUrl,
-          caption: selectedPanorama.name,
-          loadingTxt: "Loading panorama...",
-          defaultZoomLvl: 50,
-          navbar: ["zoom", "fullscreen", "caption"],
-          touchmoveTwoFingers: true,
-          mousewheelCtrlKey: false,
-        });
+        // Handle different panorama types
+        switch (panoramaViewType) {
+          case "planar":
+          case "wide-angle":
+            // For planar/wide-angle, we just show the image normally
+            setPanoramaViewerReady(true);
+            break;
 
-        setPanoramaViewerReady(true);
+          case "360-degree":
+          case "spherical":
+            // Full spherical panorama
+            const { Viewer } = await import("@photo-sphere-viewer/core");
+            await import("@photo-sphere-viewer/core/index.css");
+
+            viewerInstanceRef.current = new Viewer({
+              container: panoramaViewerRef.current,
+              panorama: panoramaUrl,
+              caption: selectedPanorama.name,
+              loadingTxt: "Loading 360° panorama...",
+              defaultZoomLvl: 50,
+              navbar: ["zoom", "fullscreen", "caption"],
+              touchmoveTwoFingers: true,
+              mousewheelCtrlKey: false,
+            });
+            setPanoramaViewerReady(true);
+            break;
+
+          case "cylindrical":
+            // Cylindrical panorama (360° horizontal, limited vertical)
+            const { Viewer: CylindricalViewer } = await import("@photo-sphere-viewer/core");
+            await import("@photo-sphere-viewer/core/index.css");
+
+            viewerInstanceRef.current = new CylindricalViewer({
+              container: panoramaViewerRef.current,
+              panorama: panoramaUrl,
+              caption: selectedPanorama.name,
+              loadingTxt: "Loading cylindrical panorama...",
+              defaultZoomLvl: 50,
+              navbar: ["zoom", "fullscreen", "caption"],
+              touchmoveTwoFingers: true,
+              mousewheelCtrlKey: false,
+              sphereCorrection: { pan: 0, tilt: 0, roll: 0 },
+              fisheye: false,
+            });
+            setPanoramaViewerReady(true);
+            break;
+
+          case "horizontal":
+            // Horizontal panorama (wide field of view horizontally)
+            const { Viewer: HorizontalViewer } = await import("@photo-sphere-viewer/core");
+            await import("@photo-sphere-viewer/core/index.css");
+
+            viewerInstanceRef.current = new HorizontalViewer({
+              container: panoramaViewerRef.current,
+              panorama: panoramaUrl,
+              caption: selectedPanorama.name,
+              loadingTxt: "Loading horizontal panorama...",
+              defaultZoomLvl: 50,
+              navbar: ["zoom", "fullscreen", "caption"],
+              touchmoveTwoFingers: true,
+              mousewheelCtrlKey: false,
+              latRange: [-Math.PI / 6, Math.PI / 6], // Limit vertical movement
+            });
+            setPanoramaViewerReady(true);
+            break;
+
+          case "vertical":
+            // Vertical panorama (tall field of view vertically)
+            const { Viewer: VerticalViewer } = await import("@photo-sphere-viewer/core");
+            await import("@photo-sphere-viewer/core/index.css");
+
+            viewerInstanceRef.current = new VerticalViewer({
+              container: panoramaViewerRef.current,
+              panorama: panoramaUrl,
+              caption: selectedPanorama.name,
+              loadingTxt: "Loading vertical panorama...",
+              defaultZoomLvl: 50,
+              navbar: ["zoom", "fullscreen", "caption"],
+              touchmoveTwoFingers: true,
+              mousewheelCtrlKey: false,
+              longRange: [-Math.PI / 6, Math.PI / 6], // Limit horizontal movement
+            });
+            setPanoramaViewerReady(true);
+            break;
+
+          default:
+            setPanoramaViewerReady(true);
+        }
       } catch (error) {
         console.error("Failed to initialize panorama viewer:", error);
         setPanoramaViewerReady(false);
@@ -243,7 +336,7 @@ export default function Maps() {
       }
       setPanoramaViewerReady(false);
     };
-  }, [selectedPanorama]);
+  }, [selectedPanorama, panoramaViewType]);
 
   const loadSubfolderContents = useCallback(async (folderId: string) => {
     if (subfolderContents[folderId]) return;
@@ -274,6 +367,7 @@ export default function Maps() {
     }
     setSubfolderContents({});
     setSelectedPanorama(null);
+    setPanoramaViewType("360-degree");
   }, []);
 
   const toggleFolder = useCallback((folderId: string, hasSubfolders?: boolean) => {
@@ -361,6 +455,23 @@ export default function Maps() {
     }
     return images;
   }, [panoramaImages, selectedPanoramaFolder, searchQuery]);
+
+  // Panorama control handlers
+  const handlePanoramaChange = useCallback((setting: string, value: number) => {
+    setPanoramaSettings(prev => ({
+      ...prev,
+      [setting]: value
+    }));
+  }, []);
+
+  const resetPanoramaView = useCallback(() => {
+    setPanoramaSettings({
+      yaw: 0,
+      pitch: 0,
+      zoom: 1,
+      fov: 90,
+    });
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "linear-gradient(180deg, #0E2148 0%, #1A1E32 100%)" }}>
@@ -621,10 +732,39 @@ export default function Maps() {
               <div className="w-full h-full flex flex-col bg-gray-900">
                 {selectedPanorama ? (
                   <div className="flex-1 flex flex-col">
-                    <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between gap-4">
+                    <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center justify-between gap-4 flex-wrap">
                       <h2 className="text-xl font-bold text-yellow-400 truncate max-w-md">{selectedPanorama.name}</h2>
-                      <div className="flex items-center gap-2">
-                        <a href={selectedPanorama.webViewLink} target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded-lg text-sm bg-teal-600 text-white flex items-center gap-2" data-testid="link-open-panorama-drive">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <label htmlFor="panorama-view-type" className="text-sm text-gray-300 whitespace-nowrap">View Type:</label>
+                          <select
+                            id="panorama-view-type"
+                            value={panoramaViewType}
+                            onChange={(e) => setPanoramaViewType(e.target.value)}
+                            className="px-3 py-2 rounded-lg text-sm bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            data-testid="select-panorama-view-type"
+                          >
+                            {PANORAMA_VIEW_TYPES.map((type) => (
+                              <option key={type.value} value={type.value}>
+                                {type.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Panorama Controls for 360-degree views */}
+                        {(panoramaViewType === "360-degree" || panoramaViewType === "spherical") && viewerInstanceRef.current && (
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={resetPanoramaView}
+                              className="px-3 py-2 rounded-lg text-sm bg-gray-700 text-white hover:bg-gray-600"
+                            >
+                              Reset View
+                            </button>
+                          </div>
+                        )}
+
+                        <a href={selectedPanorama.webViewLink} target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded-lg text-sm bg-teal-600 text-white flex items-center gap-2 whitespace-nowrap" data-testid="link-open-panorama-drive">
                           <Globe className="w-4 h-4" /> Open in Drive
                         </a>
                         <button
@@ -643,12 +783,88 @@ export default function Maps() {
                         </button>
                       </div>
                     </div>
-                    <div className="flex-1 relative bg-black">
-                      <div ref={panoramaViewerRef} className="absolute inset-0" style={{ width: '100%', height: '100%' }} data-testid="panorama-viewer-container" />
-                      {!panoramaViewerReady && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-                          <LoadingSpinner message="Loading 360° panorama..." />
+
+                    {/* Panorama Settings Panel */}
+                    {(panoramaViewType === "360-degree" || panoramaViewType === "spherical" || panoramaViewType === "cylindrical") && (
+                      <div className="p-3 bg-gray-800 border-b border-gray-700 flex flex-wrap gap-4 items-center">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-gray-400">Yaw:</label>
+                          <input
+                            type="range"
+                            min="-180"
+                            max="180"
+                            value={panoramaSettings.yaw}
+                            onChange={(e) => handlePanoramaChange('yaw', parseInt(e.target.value))}
+                            className="w-24"
+                          />
+                          <span className="text-xs text-white w-10">{panoramaSettings.yaw}°</span>
                         </div>
+
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-gray-400">Pitch:</label>
+                          <input
+                            type="range"
+                            min="-90"
+                            max="90"
+                            value={panoramaSettings.pitch}
+                            onChange={(e) => handlePanoramaChange('pitch', parseInt(e.target.value))}
+                            className="w-24"
+                          />
+                          <span className="text-xs text-white w-10">{panoramaSettings.pitch}°</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-gray-400">Zoom:</label>
+                          <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            value={panoramaSettings.zoom}
+                            onChange={(e) => handlePanoramaChange('zoom', parseInt(e.target.value))}
+                            className="w-24"
+                          />
+                          <span className="text-xs text-white w-10">{panoramaSettings.zoom}x</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-gray-400">FOV:</label>
+                          <input
+                            type="range"
+                            min="30"
+                            max="120"
+                            value={panoramaSettings.fov}
+                            onChange={(e) => handlePanoramaChange('fov', parseInt(e.target.value))}
+                            className="w-24"
+                          />
+                          <span className="text-xs text-white w-10">{panoramaSettings.fov}°</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex-1 relative bg-black">
+                      {panoramaViewType === "planar" || panoramaViewType === "wide-angle" ? (
+                        <div className="absolute inset-0 flex items-center justify-center p-8 overflow-auto">
+                          {panoramaViewerReady ? (
+                            <img
+                              ref={planarImageRef}
+                              src={`/api/panorama/image/${selectedPanorama.id}`}
+                              alt={selectedPanorama.name}
+                              className="max-w-full max-h-full object-contain"
+                              style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}
+                            />
+                          ) : (
+                            <LoadingSpinner message={`Loading ${panoramaViewType} view...`} />
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <div ref={panoramaViewerRef} className="absolute inset-0" style={{ width: '100%', height: '100%' }} data-testid="panorama-viewer-container" />
+                          {!panoramaViewerReady && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+                              <LoadingSpinner message={`Loading ${panoramaViewType} panorama...`} />
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -699,6 +915,44 @@ export default function Maps() {
                             </div>
                           </button>
                         ))}
+                      </div>
+
+                      <div className="mt-8 p-6 rounded-xl bg-gray-800 border border-gray-700">
+                        <h4 className="text-lg font-semibold text-yellow-300 mb-4">Panorama View Types</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div className="space-y-3">
+                            <div>
+                              <h5 className="font-medium text-teal-400 mb-1">360-Degree</h5>
+                              <p className="text-gray-300">Full spherical panorama with complete 360° horizontal and vertical viewing.</p>
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-teal-400 mb-1">Spherical</h5>
+                              <p className="text-gray-300">Interactive spherical view allowing exploration in all directions.</p>
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-teal-400 mb-1">Cylindrical</h5>
+                              <p className="text-gray-300">360° horizontal view with limited vertical range, ideal for landscapes.</p>
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-teal-400 mb-1">Horizontal</h5>
+                              <p className="text-gray-300">Wide horizontal panorama with restricted vertical movement.</p>
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            <div>
+                              <h5 className="font-medium text-teal-400 mb-1">Vertical</h5>
+                              <p className="text-gray-300">Tall vertical panorama with restricted horizontal movement.</p>
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-teal-400 mb-1">Wide-Angle</h5>
+                              <p className="text-gray-300">Standard wide-angle image display without sphere wrapping.</p>
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-teal-400 mb-1">Planar</h5>
+                              <p className="text-gray-300">Flat 2D image view for standard photographs.</p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

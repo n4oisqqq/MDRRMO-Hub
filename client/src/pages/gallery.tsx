@@ -57,12 +57,12 @@ function FolderTree({
   };
 
   return (
-    <div className={`${level > 0 ? "ml-4" : ""}`}>
+    <div className={`${level > 0 ? "ml-2" : ""}`}>
       <div className="flex items-center gap-1">
         {hasSubfolders ? (
           <button
             className="p-1 hover:bg-white rounded transition-colors flex-shrink-0"
-            style={{ color: "#8B4513" }}
+            style={{ color: "#1e40af" }}
             onClick={handleToggle}
           >
             {isOpen ? (
@@ -78,21 +78,20 @@ function FolderTree({
           onClick={handleSelect}
           className={`flex-1 flex items-center gap-2 py-2 px-2 rounded-lg transition-colors text-left ${
             selectedFolder === folder.id
-              ? "bg-[#FFC9E]/50"
-              : "hover:bg-white/50"
+              ? "bg-blue-500 text-white"
+              : "hover:bg-blue-100 text-blue-900"
           }`}
-          style={{ color: "#8B4513" }}
           data-testid={`folder-${folder.id}`}
         >
           <Folder
             className="w-4 h-4 flex-shrink-0"
             style={{
-              color: selectedFolder === folder.id ? "#8B4513" : "#FEAE97",
+              color: selectedFolder === folder.id ? "white" : "#f59e0b",
             }}
           />
           <span className="text-sm font-medium truncate">{folder.name}</span>
           {isLoading && (
-            <span className="ml-auto text-xs" style={{ color: "#FEAE97" }}>
+            <span className="ml-auto text-xs" style={{ color: "#f59e0b" }}>
               Loading...
             </span>
           )}
@@ -197,29 +196,29 @@ export default function Gallery() {
   return (
     <div
       className="min-h-screen flex flex-col"
-      style={{ background: "linear-gradient(135deg, #FFDFE0, #FFF6F7)" }}
+      style={{ background: "linear-gradient(135deg, #dbeafe, #eff6ff)" }}
     >
       <BackgroundPattern />
       <Header title="PHOTO GALLERY" showBack />
 
-      <main className="flex-1 relative z-10 px-4 md:px-8 py-8">
+      <main className="flex-1 relative z-10 px-4 md:px-2 py-2">
         <div className="max-w-7xl mx-auto">
           <div
             className="rounded-3xl p-6 md:p-8 shadow-2xl"
             style={{
-              background: "linear-gradient(135deg, #FFC9E, #FFDFE0)",
-              border: "1px solid #FEAE97",
+              background: "linear-gradient(135deg, #3b82f6, #60a5fa)",
+              border: "1px solid #fbbf24",
             }}
           >
             <div
               className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-8 pb-6 border-b-2"
-              style={{ borderColor: "rgba(254, 174, 151, 0.5)" }}
+              style={{ borderColor: "rgba(251, 191, 36, 0.5)" }}
             >
               <div className="flex items-center gap-4">
                 <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center shadow-md"
                   style={{
-                    background: "linear-gradient(135deg, #FEAE97, #FFC9E)",
+                    background: "linear-gradient(135deg, #f59e0b, #fbbf24)",
                   }}
                 >
                   <FileText className="w-6 h-6 text-white" />
@@ -227,8 +226,8 @@ export default function Gallery() {
                 <h2
                   className="text-2xl md:text-3xl font-extrabold"
                   style={{
-                    color: "#8B4513",
-                    textShadow: "0 1px 2px rgba(255, 255, 255, 0.3)",
+                    color: "white",
+                    textShadow: "0 1px 2px rgba(0, 0, 0, 0.3)",
                   }}
                 >
                   Photo Gallery
@@ -238,20 +237,20 @@ export default function Gallery() {
                 value={searchQuery}
                 onChange={setSearchQuery}
                 placeholder="Search photos..."
-                className="bg-white/90 border-2 border-[#FFC9E] focus:border-[#FEAE97]"
+                className="bg-white/90 border-2 border-[#fbbf24] focus:border-[#1e40af]"
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-2">
               <div
-                className="rounded-xl p-4 lg:col-span-1 shadow-inner"
-                style={{ background: "rgba(255, 255, 255, 0.5)" }}
+                className="rounded-xl p-4 lg:col-span-1"
+                style={{ background: "rgba(255, 255, 255, 0.9)" }}
               >
                 <h3
                   className="font-semibold mb-4 flex items-center gap-2"
-                  style={{ color: "#8B4513" }}
+                  style={{ color: "#1e40af" }}
                 >
-                  <Folder className="w-5 h-5" style={{ color: "#FEAE97" }} />
+                  <Folder className="w-5 h-5" style={{ color: "#f59e0b" }} />
                   PHOTO ALBUMS
                 </h3>
 
@@ -260,7 +259,7 @@ export default function Gallery() {
                 ) : folders.length === 0 ? (
                   <p
                     className="text-sm text-center py-8"
-                    style={{ color: "rgba(139, 69, 19, 0.7)" }}
+                    style={{ color: "rgba(30, 64, 175, 0.7)" }}
                   >
                     No album available
                   </p>
@@ -312,8 +311,8 @@ export default function Gallery() {
                         className="group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl shadow-md"
                         style={{
                           background:
-                            "linear-gradient(135deg, #FFF6F7, #FFDFE0)",
-                          border: "1px solid #FEAE97",
+                            "linear-gradient(135deg, #eff6ff, #dbeafe)",
+                          border: "1px solid #fbbf24",
                         }}
                         data-testid={`image-card-${image.id}`}
                       >
@@ -330,7 +329,7 @@ export default function Gallery() {
                           className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end"
                           style={{
                             background:
-                              "linear-gradient(to top, rgba(139, 69, 19, 0.8) 0%, transparent 50%)",
+                              "linear-gradient(to top, rgba(30, 64, 175, 0.8) 0%, transparent 50%)",
                           }}
                         >
                           <div className="p-3 w-full">

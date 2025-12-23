@@ -40,3 +40,9 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_mem_db:1.0.0", "google-drive:1.0.0", "google-sheet:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+GOOGLE_SHEETS_SPREADSHEET_ID = "1UtT9t2LZ5NEc-wbGv44mDeDjWLxOLBQHA5yy6jiLc7E"
+GOOGLE_API_KEY = "AIzaSyCDcthLGNPlbMr4AFzuK5tl0CMTzsQI9EI"
